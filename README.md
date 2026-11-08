@@ -267,4 +267,48 @@ python scripts/run_ablation.py      # 重跑消融，这时的 delta 才有意�
 | 回归对比 | `python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl --output data/reports/ci_summary.json --compare eval/baseline_summary.json` |
 | 消融实验 | `python scripts/run_ablation.py` |
 | 单测 | `python -m unittest discover -s tests -v` |
-| 界面 | `streamlit run src/app.py` |
+| 界面（零依赖，推荐） | `python scripts/serve.py` → 打开 `http://127.0.0.1:8765` |
+| 界面（可选） | `streamlit run src/app.py` |
+
+---
+
+## 十一、版本与迭代约定
+
+**每完成一步都会交付一个能使用的版本**，具体是四条硬要求（完整记录见 `CHANGELOG.md`）：
+
+1. 能运行：单测与主要脚本全绿；
+2. 能打开看：有可直接使用的入口，不只是改代码；
+3. 有记录：`CHANGELOG.md` 新增一节，写清新增文件、能跑什么、验证数字、已知限制；
+4. 能看到变化：`git commit` + 打 tag，页面上「代码变化」区与
+   `git diff <上一版> <本版> --stat` 都能看到改了什么。
+
+### 现在怎么打开看
+
+```bash
+python scripts/serve.py          # 或 Windows 双击 start_demo.bat
+# 浏览器自动打开 http://127.0.0.1:8765
+```
+
+页面可以：直接提问（5 个快捷问题）、切换 single/agent 模式、查看生成的 SQL
+与执行轨迹、现跑冒烟评估与五组消融、查看 git 提交历史与 diff 统计。
+**离线直接双击 `src/web/index.html` 也能看**版本时间线与评估数字快照。
+
+### 版本一览
+
+| 版本 | 日期 | 能用的东西 |
+|---|---|---|
+| v0.1 | 2026-11-07 | 七模块骨架、CLI、15 条冒烟集、9 个单测 |
+| v0.2 | 2026-11-07 | 104 条正式集、五种判定口径、五组消融、回归门禁 |
+| **v0.3** | **2026-11-08** | **零依赖浏览器演示、版本可视化、Git 迭代历史** |
+
+查看变化：
+
+```bash
+git log --oneline --decorate
+git tag -l
+git diff v0.2 v0.3 --stat       # 本版新增了哪些文件、改了多少行
+git show v0.3 --stat
+```
+
+Git 历史从 v0.2 开始（v0.1 时还没建仓库，不伪造历史，其变更以文字记在 CHANGELOG）。
+之后每完成一个小步骤都单独提交、单独打 tag，不攒成大版本一起交。
