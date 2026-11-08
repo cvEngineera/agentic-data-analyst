@@ -268,6 +268,8 @@ python scripts/run_ablation.py      # 重跑消融，这时的 delta 才有意�
 | 消融实验 | `python scripts/run_ablation.py` |
 | 单测 | `python -m unittest discover -s tests -v` |
 | 界面（零依赖，推荐） | `python scripts/serve.py` → 打开 `http://127.0.0.1:8765` |
+| 界面（离线快照） | 直接双击 `src/web/index.html`，点快捷问题看预录结果 |
+| 刷新离线快照 | `python scripts/build_snapshots.py`（改了运行时逻辑后重跑） |
 | 界面（可选） | `streamlit run src/app.py` |
 
 ---
@@ -299,7 +301,8 @@ python scripts/serve.py          # 或 Windows 双击 start_demo.bat
 |---|---|---|
 | v0.1 | 2026-11-07 | 七模块骨架、CLI、15 条冒烟集、9 个单测 |
 | v0.2 | 2026-11-07 | 104 条正式集、五种判定口径、五组消融、回归门禁 |
-| **v0.3** | **2026-11-08** | **零依赖浏览器演示、版本可视化、Git 迭代历史** |
+| v0.3 | 2026-11-08 | 零依赖浏览器演示、版本可视化、Git 迭代历史 |
+| **v0.3.1** | **2026-11-08** | **离线也能点：5 个快捷问题的真实结果快照** |
 
 查看变化：
 
