@@ -40,7 +40,7 @@ from src.evaluation.ablation import run_ablation  # noqa: E402
 from src.evaluation.runner import evaluate, load_cases  # noqa: E402
 
 WEB_DIR = ROOT / "src" / "web"
-VERSION = "v0.3.1"
+VERSION = "v0.3.2"
 
 
 def _git_text(args: list[str]) -> str:
@@ -86,11 +86,21 @@ def _status() -> dict:
 
 
 def _changes() -> dict:
-    """返回 git 版本历史与相对上一版的变更统计，页面用来展示「代码不断变化」。"""
+    """返回 git 版本历史与相对上一版的变更统计，页面用来展示「代码不断变化」。
+
+    diff 不写死版本号：按版本排序取最近两个 tag 自动对比，
+    这样以后每打一个新 tag，页面刷新就能看到最新一步改了什么。
+    """
+    tags_text = _git_text(["tag", "-l", "--sort=-v:refname"])
+    tags = [t.strip() for t in tags_text.splitlines() if t.strip()]
+    cur, prev = (tags[0] if tags else "HEAD"), (tags[1] if len(tags) > 1 else "")
+    diff = (_git_text(["diff", prev, cur, "--stat"])
+            if prev else "(只有一个版本，暂无可对比的 diff)")
     return {
-        "tags": _git_text(["tag", "-l"]),
+        "tags": tags_text,
         "log": _git_text(["log", "--oneline", "--decorate", "-10"]),
-        "diff_prev": _git_text(["diff", "v0.2", "v0.3", "--stat"]),
+        "diff_label": f"{prev} → {cur} 变更" if prev else "版本变更",
+        "diff_prev": diff,
         "status": _git_text(["status", "--short"]),
     }
 

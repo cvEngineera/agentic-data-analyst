@@ -48,7 +48,7 @@ footer{border-top:1px solid var(--line);padding:14px 28px;font-size:12px;color:v
 
 <header>
   <h1>物联网监测数据分析 Agent</h1>
-  <span class="badge" id="verBadge">v0.3.1</span>
+  <span class="badge" id="verBadge">v0.3.2</span>
   <span class="badge" id="modeBadge">mock 模式</span>
   <span class="status" id="statusText">正在读取状态…</span>
 </header>
@@ -155,7 +155,8 @@ async function loadStatus() {
 async function loadChanges() {
   const c = await api("/api/changes");
   $("changes").textContent = c
-    ? ["标签：\n" + c.tags, "提交历史：\n" + c.log, "v0.2 → v0.3 变更：\n" + c.diff_prev,
+    ? ["标签：\n" + c.tags, "提交历史：\n" + c.log,
+       (c.diff_label || "版本变更") + "：\n" + c.diff_prev,
        "工作区状态：\n" + (c.status || "(干净)")].join("\n\n")
     : "（启动 python scripts/serve.py 后这里会显示 git 提交、标签与 diff --stat）";
 }
