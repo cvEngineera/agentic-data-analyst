@@ -1,0 +1,10 @@
+.env
+__pycache__/
+*.py[cod]
+data/db/*.db
+data/reports/*.json
+data/reports/*.jsonl
+.venv/
+venv/
+.streamlit/
+.pytest_cache/

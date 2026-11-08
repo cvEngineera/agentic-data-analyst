@@ -1,0 +1,17 @@
+# 基线必需（已验证可安装）
+sqlglot>=27,<31
+python-dotenv>=1.0
+
+# 可选增强：装上后自动启用，不装也能跑完整基线
+# 真实模型调用
+openai>=1.40
+# 结构化输出校验（代码内有标准库降级实现）
+pydantic>=2.8
+# 评估统计与图表
+pandas>=2.2
+matplotlib>=3.8
+# 交互界面
+streamlit>=1.38
+
+# 说明：基线链路只依赖 Python 标准库 + sqlglot。
+# 完整安装：pip install -r requirements.txt

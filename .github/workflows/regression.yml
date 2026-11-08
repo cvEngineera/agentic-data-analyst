@@ -1,0 +1,70 @@
+# 回归门禁：每次 push / PR 自动跑单测与分层评估，防止改提示词或模块后效果悄悄变差。
+#
+# 说明：
+# - 只装基线必需的两个依赖，避免 CI 因可选大包（streamlit/matplotlib）安装超时而挂掉。
+# - eval/baseline_summary.json 是提交进仓库的 mock 链路基线（104 题，33.7%），
+#   它用于「回归检测」，不是论文里的真实准确率。
+# - 阈值放宽到 2 个百分点：合成数据按运行时刻的 now 生成，跨时区的
+#   「今天/昨天」数据量会略有差异，留出余量避免误报。接真实模型后应收紧。
+name: 回归门禁
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装基线依赖
+        run: pip install sqlglot python-dotenv
+
+      - name: 初始化数据库
+        run: python scripts/init_db.py --force
+
+      - name: 烟雾测试
+        run: python -m unittest discover -s tests -v
+
+      - name: 生成正式评估集
+        run: python scripts/build_eval_cases.py
+
+      - name: 分层评估与回归对比
+        run: >-
+          python scripts/run_eval.py
+          --cases src/evaluation/cases_eval.jsonl
+          --output data/reports/ci_summary.json
+          --compare eval/baseline_summary.json
+
+      - name: 回归门禁判定
+        run: |
+          python - <<'PY'
+          import json, sys
+          TOL = 0.02
+          cur = json.load(open('data/reports/ci_summary.json', encoding='utf-8'))
+          base = json.load(open('eval/baseline_summary.json', encoding='utf-8'))
+          bad = []
+          if cur['accuracy'] < base['accuracy'] - TOL:
+              bad.append(f"overall {base['accuracy']:.1%} -> {cur['accuracy']:.1%}")
+          for cat, v in cur['by_category'].items():
+              old = base['by_category'].get(cat, {}).get('accuracy', v['accuracy'])
+              if v['accuracy'] < old - TOL:
+                  bad.append(f"{cat} {old:.1%} -> {v['accuracy']:.1%}")
+          if bad:
+              print('REGRESSION: ' + '; '.join(bad))
+              sys.exit(1)
+          print(f"回归门禁通过（容差 {TOL:.0%}）：无分层准确率下降")
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-reports
+          path: data/reports/

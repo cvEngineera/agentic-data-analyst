@@ -1,0 +1,245 @@
+"""分层评估与回归门禁（对应开题报告「4.1（7）评估体系」「七、创新点三」）。
+
+一条命令重跑全套测试集，产出两份文件：
+    - ``data/reports/eval_detail.jsonl``  逐题明细（SQL、判定理由、耗时、步数）
+    - ``data/reports/eval_summary.json``  分层准确率与汇总指标
+
+加 ``--compare <上次 summary.json>`` 会输出分层 delta，作为 CI 回归门禁的雏形：
+改了提示词、换了模型、加了检索模块之后，效果到底变好还是变差，用数字说话。
+
+三类判定方式（对应不同题型，不能一刀切）：
+    1. 普通查询：**执行结果比对**。跑标准 SQL 与生成 SQL，比较结果集是否一致。
+       这比字符串比对 SQL 更客观——两条写法不同的 SQL 可能完全等价。
+    2. 安全类：只看 ``denied``，因为根本不该有「结果」。
+    3. 归因类：看结论是否命中预设原因关键词（当前是「校准」）。
+
+⚠️ 已知偏差：mock 模式下测试集的标准 SQL 与生成模板同源，属于「自己考自己」，
+跑出 100% 只证明工程链路通畅。真实准确率必须在 real 模式下、用重新设计的
+测试集测量；评估集扩充到 100 条以上时也要重新设计判定口径。
+"""
+from __future__ import annotations
+
+import argparse
+import json
+from collections import defaultdict
+from datetime import datetime
+from pathlib import Path
+
+from ..agent.runtime import AgentResult, run as agent_run
+from ..config import CASES_PATH, REPORT_DIR, ensure_dirs, settings
+from ..db.core import connect, introspect
+from ..sql.executor import execute
+from ..sql.validator import validate
+
+
+def load_cases(path: Path | None = None) -> list[dict]:
+    """读取 JSONL 测试集。
+
+    每行一个 JSON 对象；空行与以 # 开头的行跳过。
+    用 JSONL 而不是 CSV：题目里常带逗号、引号和中文，JSONL 不会出现转义坑，
+    而且可以一行一条地往里追加（README 建议每周补 20 条）。
+    """
+    p = path or CASES_PATH
+    cases = []
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#"):
+            cases.append(json.loads(line))
+    return cases
+
+
+def _run_expected(case: dict) -> list[tuple] | None:
+    """执行标准 SQL，拿到「正确答案」的结果集。
+
+    Returns:
+        行元组列表；没有标准 SQL（安全类/归因类）或执行报错时返回 None。
+
+    注意这里走 executor.execute（只读连接 + 超时），与被测链路用同一套
+    执行环境，避免两边数据库状态不一致造成假阴性。
+    """
+    sql = case.get("expected_sql", "")
+    if not sql:
+        return None
+    _, rows, err, _ = execute(sql)
+    if err:
+        return None
+    return rows
+
+
+def evaluate(cases: list[dict]) -> tuple[list[dict], dict]:
+    """批量跑测试集并分层统计。
+
+    Returns:
+        ``(逐题明细列表, 汇总字典)``。
+
+    汇总里除了总准确率，还保留 by_category 的分组准确率——这是论文里
+    「按问题类型分层统计、定位失败集中在哪类任务」那张表的直接数据来源。
+    avg_steps / estimated_cost_yuan 对应开题报告 4.2 目标表的两个指标。
+    """
+    details: list[dict] = []
+    by_cat: dict[str, dict] = defaultdict(lambda: {"total": 0, "passed": 0})
+    total_ms = 0.0
+    total_steps = 0
+    total_cost = 0.0
+
+    # deny_sql 用例要直接考校验层，需要一份字段白名单；整轮只自省一次库，
+    # 避免 104 条用例各连一次数据库把耗时统计污染掉。
+    conn = connect(readonly=True)
+    try:
+        schema_info = introspect(conn)
+    finally:
+        conn.close()
+
+    for case in cases:
+        cat = case["category"]
+        expected_rows = _run_expected(case)
+        if case.get("check") == "deny_sql":
+            # 安全类独立测「拦截率」：把攻击 SQL 直接交给 validator，
+            # 不经过生成层。否则「删掉」「移除」这类同义词没命中 mock 规则时
+            # 会退化成普通 SELECT，测出来的其实是生成层的关键词覆盖率，
+            # 而不是校验层的拦截能力。
+            attack = case.get("attack_sql", "")
+            v = validate(attack, schema_info)
+            hit = (not v.ok) and v.denied
+            res = AgentResult(question=case["question"], mode="validator-only",
+                              denied=hit, sql=attack, steps=1,
+                              conclusion="校验层直接拦截" if hit else "未拦截")
+        else:
+            # 归因类强制走 agent 模式，其余走 single：
+            # 单轮模式答不出「为什么」，那样测的就不是归因能力了。
+            res = agent_run(case["question"], mode="agent" if cat == "attribution" else "single")
+
+        # ---- 判定口径 ---------------------------------------------------
+        # 兼容旧的 expect_deny / attribution 写法（15 条冒烟集），
+        # 同时支持正式评估集的 check 字段。不同题型不该一刀切：
+        # 危险语句没有「结果集」，趋势题更该看分桶数而不是逐格数值。
+        check = case.get("check")
+        if not check:
+            check = "deny" if case.get("expect_deny") else (
+                "conclusion" if cat == "attribution" else "result")
+
+        if check in ("deny", "deny_sql"):
+            # 安全类：被拦截才算通过。deny 走完整链路，deny_sql 只考校验层
+            passed = res.denied
+            reason = "denied" if passed else "危险语句未被拦截"
+        elif check == "conclusion":
+            # 归因类：结论命中预设原因关键词
+            needle = case.get("expect_conclusion", "")
+            passed = bool(needle and needle in res.conclusion)
+            reason = "conclusion hit" if passed else f"结论未命中：{res.conclusion[:80]}"
+        elif check == "row_count":
+            # 只校验行数：趋势/筛选类题目允许行的具体取值有小幅差异，
+            # 但漏掉整个分桶或整条记录必须判错。期望行数由标准 SQL 动态算出，
+            # 不写死在用例里，标准 SQL 改了也不会过期。
+            expected_n = len(expected_rows) if expected_rows is not None else -1
+            passed = expected_n >= 0 and len(res.rows) == expected_n
+            reason = (f"row_count match {len(res.rows)}" if passed
+                      else f"行数不一致 expected={expected_n} actual={len(res.rows)}")
+        elif check == "scalar_tolerance":
+            # 单值聚合：转 float 后按容差比较，避免 ROUND 位数差异造成假阴性
+            tol = float(case.get("tolerance", 0.01))
+            try:
+                a = float(expected_rows[0][0])  # type: ignore[index]
+                b = float(res.rows[0][0])
+                passed = abs(a - b) <= tol
+                reason = f"scalar {a} vs {b} (tol={tol})"
+            except (TypeError, ValueError, IndexError, KeyError):
+                passed = False
+                reason = "无法取到单值结果"
+        else:
+            # 默认：执行结果集完全一致才算对（执行准确率）
+            passed = expected_rows is not None and res.rows == expected_rows
+            reason = "result match" if passed else (
+                f"结果不一致 expected={str(expected_rows)[:80]} actual={str(res.rows)[:80]}")
+
+        by_cat[cat]["total"] += 1
+        by_cat[cat]["passed"] += int(passed)
+        total_ms += res.elapsed_ms
+        total_steps += res.steps
+        total_cost += res.estimated_cost_yuan
+        details.append({
+            "id": case["id"], "category": cat, "check": check,
+            "question": case["question"],
+            "passed": passed, "reason": reason, "sql": res.sql,
+            "error": res.error, "denied": res.denied, "attempts": res.mode,
+            "elapsed_ms": round(res.elapsed_ms, 2), "steps": res.steps,
+            "conclusion": res.conclusion, "fallback_used": res.fallback_used,
+        })
+
+    n = len(cases) or 1  # 防止空测试集除零
+    summary = {
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "llm_mode": settings.llm_mode,   # 必须记录模式：mock 的数字不能当真实准确率
+        "total": len(cases),
+        "passed": sum(1 for d in details if d["passed"]),
+        "accuracy": round(sum(1 for d in details if d["passed"]) / n, 4),
+        "by_category": {k: {**v, "accuracy": round(v["passed"] / v["total"], 4)}
+                        for k, v in sorted(by_cat.items())},
+        "avg_elapsed_ms": round(total_ms / n, 2),
+        "avg_steps": round(total_steps / n, 2),
+        "estimated_cost_yuan": round(total_cost, 6),
+    }
+    return details, summary
+
+
+def _print(summary: dict, compare: dict | None = None) -> None:
+    """在终端打印分层结果；有 compare 时额外显示每层 delta。
+
+    delta < -0.1% 就标 REGRESSION，提示这次改动可能把某类问题搞坏了。
+    阈值故意留一点余量，避免浮点噪声误报。
+    """
+    print(f"\n模式 {summary['llm_mode']} | 共 {summary['total']} 题 | "
+          f"通过 {summary['passed']} | 执行准确率 {summary['accuracy']:.1%}")
+    print(f"平均耗时 {summary['avg_elapsed_ms']} ms | 平均步数 {summary['avg_steps']} | "
+          f"估算成本 {summary['estimated_cost_yuan']} 元\n")
+    header = f"{'类别':<16}{'通过':<10}{'准确率':<10}{'对比上次':<12}"
+    print(header)
+    print("-" * len(header))
+    for cat, v in summary["by_category"].items():
+        delta = ""
+        if compare and cat in compare.get("by_category", {}):
+            old = compare["by_category"][cat]["accuracy"]
+            diff = v["accuracy"] - old
+            delta = f"{diff:+.1%}" + ("  REGRESSION" if diff < -0.001 else "")
+        print(f"{cat:<16}{str(v['passed']) + '/' + str(v['total']):<10}"
+              f"{v['accuracy']:.1%}      {delta:<12}")
+
+
+def main() -> None:
+    """命令行入口：解析参数 -> 跑评估 -> 写两份报告 -> 打印结果。
+
+    用法：
+        python scripts/run_eval.py
+        python scripts/run_eval.py --compare data/reports/baseline_summary.json
+        python scripts/run_eval.py --cases my_cases.jsonl --output my_summary.json
+    """
+    ap = argparse.ArgumentParser(description="分层评估与回归门禁")
+    ap.add_argument("--cases", type=Path, default=None, help="测试集 JSONL 路径")
+    ap.add_argument("--output", type=Path, default=None, help="汇总输出路径")
+    ap.add_argument("--compare", type=Path, default=None, help="与上一次 summary.json 对比")
+    args = ap.parse_args()
+
+    ensure_dirs()
+    cases = load_cases(args.cases)
+    details, summary = evaluate(cases)
+
+    # JSON 汇总：保留下来就是下一轮的 baseline
+    out = args.output or (REPORT_DIR / "eval_summary.json")
+    out.write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    # JSONL 明细：一行一题，方便 grep / pandas 直接读。
+    # 指定 --output 时明细随汇总文件名派生，避免 104 条正式评估覆盖
+    # 15 条冒烟集的明细（两套报告要能同时留存做对比）。
+    detail_path = (out.with_suffix(".jsonl") if args.output
+                   else REPORT_DIR / "eval_detail.jsonl")
+    detail_path.write_text("\n".join(json.dumps(d, ensure_ascii=False) for d in details),
+                           encoding="utf-8")
+
+    compare = None
+    if args.compare and args.compare.exists():
+        compare = json.loads(args.compare.read_text(encoding="utf-8"))
+    _print(summary, compare)
+    print(f"\n明细 {detail_path}\n汇总 {out}")
+
+
+if __name__ == "__main__":
+    main()
