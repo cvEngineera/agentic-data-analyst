@@ -64,9 +64,12 @@ SQL = {
         f"{JOIN3} WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day');"
     ),
     "co2_over": (
+        # 不带人为 LIMIT：题目问的是「所有时段」，LIMIT 只是防全表扫描的
+        # 安全措施（validator 会自动补 row_limit）。标准答案写死 50 会让
+        # 「模型写了 LIMIT 100、返回更多正确记录」反而被行数判定判错。
         "SELECT d.ts, s.name AS site_name, d.co2 "
         f"{JOIN3} WHERE d.co2 > 1000 AND d.ts >= datetime('now','-7 day') "
-        "ORDER BY d.ts DESC LIMIT 50;"
+        "ORDER BY d.ts DESC;"
     ),
     "models": "SELECT DISTINCT model FROM device;",
     "humidity": (
@@ -74,9 +77,10 @@ SQL = {
         "WHERE device_id = 5 AND ts >= datetime('now','-3 day');"
     ),
     "hot_and_humid": (
+        # 同 co2_over：标准答案不设人为展示上限，让结果集反映真实语义
         "SELECT d.ts, d.temperature, d.humidity FROM sensor_data d "
         "WHERE d.temperature > 23 AND d.humidity > 45 "
-        "ORDER BY d.ts LIMIT 50;"
+        "ORDER BY d.ts;"
     ),
     # 分组聚合
     "max_temp": (

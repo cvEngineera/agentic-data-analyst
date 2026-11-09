@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..config import settings
+from ..db.core import ALLOWED_TABLES
 
 # 三表 JOIN 的固定片段：事实表 -> 设备维表 -> 教室维表。
 # 抽成常量是因为多条模板都要用，且评估集里的标准 SQL 也必须一致，
@@ -107,8 +108,14 @@ def build_prompt(question: str, schema_context: str,
         error_feedback: 上一次执行/校验失败的错误信息。非空时追加一段
             「请修正」的指令，这就是开题报告里说的「报错回喂自纠」。
     """
+    # 全局表清单硬约束（v0.6）：Schema 检索只挑「相关」的表注入 DDL，
+    # 但模型若没在片段里看到某张表，会自己臆造表名（实测出现过
+    # `FROM temperature` 这种幻觉）。这里把数据库全部合法对象列成白名单，
+    # 与 validator 的表白名单对齐——检索仍负责减噪，清单负责封死边界。
+    allowed = "、".join(ALLOWED_TABLES)
     base = (
         "你是 SQLite 数据分析助手，只输出一条可直接执行的 SELECT 语句，不要解释，不要 Markdown 代码块。\n"
+        f"数据库只包含这些表/视图：{allowed}。严禁使用清单之外的任何表名，也不要臆造字段。\n"
         "规则：只能使用下面给出的表与字段；禁止 DELETE/UPDATE/INSERT/DROP 等写操作；"
         "时间用 SQLite 的 date()/datetime('now','-N day') 表达；结果必须带 LIMIT。\n\n"
         f"表结构：\n{schema_context}\n\n用户问题：{question}\n"

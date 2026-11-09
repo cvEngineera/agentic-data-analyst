@@ -1,0 +1,179 @@
+{
+  "timestamp": "2026-11-09T17:43:49",
+  "llm_mode": "real",
+  "cases_file": "D:\\.workbuddy\\2026-10-20-18-55-52\\agentic-data-analyst\\src\\evaluation\\cases_eval.jsonl",
+  "cases_count": 144,
+  "configs": {
+    "full": {
+      "schema_context_chars": 445,
+      "flags": {
+        "fk": true,
+        "retrieval": true,
+        "correction": true
+      },
+      "total": 144,
+      "passed": 93,
+      "accuracy": 0.6458,
+      "by_category": {
+        "aggregation": 0.4688,
+        "attribution": 0.625,
+        "join": 0.4583,
+        "safety": 1.0,
+        "single_filter": 0.75,
+        "subquery": 1.0,
+        "trend": 0.5
+      },
+      "avg_steps": 2.02,
+      "avg_elapsed_ms": 1203.34,
+      "denied_count": 8,
+      "fallback_count": 2
+    },
+    "no_fk_expansion": {
+      "schema_context_chars": 330,
+      "flags": {
+        "fk": false,
+        "retrieval": true,
+        "correction": true
+      },
+      "total": 144,
+      "passed": 89,
+      "accuracy": 0.6181,
+      "by_category": {
+        "aggregation": 0.4688,
+        "attribution": 0.5,
+        "join": 0.375,
+        "safety": 1.0,
+        "single_filter": 0.725,
+        "subquery": 1.0,
+        "trend": 0.5
+      },
+      "avg_steps": 2.01,
+      "avg_elapsed_ms": 1242.88,
+      "denied_count": 8,
+      "fallback_count": 3
+    },
+    "no_retrieval": {
+      "schema_context_chars": 809,
+      "flags": {
+        "fk": true,
+        "retrieval": false,
+        "correction": true
+      },
+      "total": 144,
+      "passed": 82,
+      "accuracy": 0.5694,
+      "by_category": {
+        "aggregation": 0.2812,
+        "attribution": 0.25,
+        "join": 0.375,
+        "safety": 1.0,
+        "single_filter": 0.75,
+        "subquery": 1.0,
+        "trend": 0.5
+      },
+      "avg_steps": 2.01,
+      "avg_elapsed_ms": 1096.79,
+      "denied_count": 8,
+      "fallback_count": 0
+    },
+    "no_self_correction": {
+      "schema_context_chars": 445,
+      "flags": {
+        "fk": true,
+        "retrieval": true,
+        "correction": false
+      },
+      "total": 144,
+      "passed": 90,
+      "accuracy": 0.625,
+      "by_category": {
+        "aggregation": 0.4062,
+        "attribution": 0.625,
+        "join": 0.4583,
+        "safety": 1.0,
+        "single_filter": 0.725,
+        "subquery": 1.0,
+        "trend": 0.5
+      },
+      "avg_steps": 2.02,
+      "avg_elapsed_ms": 1106.63,
+      "denied_count": 8,
+      "fallback_count": 2
+    },
+    "minimal": {
+      "schema_context_chars": 809,
+      "flags": {
+        "fk": false,
+        "retrieval": false,
+        "correction": false
+      },
+      "total": 144,
+      "passed": 83,
+      "accuracy": 0.5764,
+      "by_category": {
+        "aggregation": 0.3125,
+        "attribution": 0.25,
+        "join": 0.375,
+        "safety": 1.0,
+        "single_filter": 0.75,
+        "subquery": 1.0,
+        "trend": 0.5
+      },
+      "avg_steps": 2.01,
+      "avg_elapsed_ms": 1015.8,
+      "denied_count": 8,
+      "fallback_count": 0
+    }
+  },
+  "delta_vs_full": {
+    "no_fk_expansion": {
+      "overall_pp": -2.77,
+      "by_category_pp": {
+        "aggregation": 0.0,
+        "attribution": -12.5,
+        "join": -8.33,
+        "safety": 0.0,
+        "single_filter": -2.5,
+        "subquery": 0.0,
+        "trend": 0.0
+      }
+    },
+    "no_retrieval": {
+      "overall_pp": -7.64,
+      "by_category_pp": {
+        "aggregation": -18.76,
+        "attribution": -37.5,
+        "join": -8.33,
+        "safety": 0.0,
+        "single_filter": 0.0,
+        "subquery": 0.0,
+        "trend": 0.0
+      }
+    },
+    "no_self_correction": {
+      "overall_pp": -2.08,
+      "by_category_pp": {
+        "aggregation": -6.26,
+        "attribution": 0.0,
+        "join": 0.0,
+        "safety": 0.0,
+        "single_filter": -2.5,
+        "subquery": 0.0,
+        "trend": 0.0
+      }
+    },
+    "minimal": {
+      "overall_pp": -6.94,
+      "by_category_pp": {
+        "aggregation": -15.63,
+        "attribution": -37.5,
+        "join": -8.33,
+        "safety": 0.0,
+        "single_filter": 0.0,
+        "subquery": 0.0,
+        "trend": 0.0
+      }
+    }
+  },
+  "interpretation": "真实模型模式：delta 为各模块相对完整方案的准确率变化（百分点）。"
+}

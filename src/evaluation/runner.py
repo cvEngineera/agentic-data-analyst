@@ -48,6 +48,37 @@ def load_cases(path: Path | None = None) -> list[dict]:
     return cases
 
 
+def _rows_equal(expected: list[tuple] | None, actual: list[tuple],
+                abs_tol: float = 0.01) -> bool:
+    """结果集比对：形状一致，数值按两位小数容差比较，其余值严格相等。
+
+    为什么不能直接用 ``==``（v0.6 修正的测量偏差）：
+        正式评估集的标准 SQL 普遍写 ``ROUND(AVG(...), 2)``，而模型生成的
+        语义等价 SQL 常直接返回 ``AVG(...)`` 的完整浮点数。实测中
+        ``22.58`` 与 ``22.575416666666666`` 被判成失败，导致明明正确的
+        SQL 被系统性误判，真实准确率被严重低估。
+
+    容差取 0.01 正好对齐标准答案自身的舍入精度，不是放水：
+        - 字符串、日期、行数、列顺序仍然严格比较；
+        - 只有数值列允许 ≤0.01 的差异，差 0.5 度的错误查询照样判错；
+        - 容差来源可追溯（标准 SQL 的 ROUND 位数），论文里能写清楚。
+    """
+    if expected is None or len(expected) != len(actual):
+        return False
+    for exp_row, act_row in zip(expected, actual):
+        if len(exp_row) != len(act_row):
+            return False
+        for a, b in zip(exp_row, act_row):
+            a_num = isinstance(a, (int, float)) and not isinstance(a, bool)
+            b_num = isinstance(b, (int, float)) and not isinstance(b, bool)
+            if a_num and b_num:
+                if abs(float(a) - float(b)) > abs_tol:
+                    return False
+            elif a != b:
+                return False
+    return True
+
+
 def _run_expected(case: dict) -> list[tuple] | None:
     """执行标准 SQL，拿到「正确答案」的结果集。
 
@@ -147,8 +178,9 @@ def evaluate(cases: list[dict]) -> tuple[list[dict], dict]:
                 passed = False
                 reason = "无法取到单值结果"
         else:
-            # 默认：执行结果集完全一致才算对（执行准确率）
-            passed = expected_rows is not None and res.rows == expected_rows
+            # 默认：执行结果集比对（执行准确率）。数值列按标准 SQL 的
+            # 两位舍入精度容差，避免把「SQL 正确但没 ROUND」误判成失败。
+            passed = _rows_equal(expected_rows, res.rows)
             reason = "result match" if passed else (
                 f"结果不一致 expected={str(expected_rows)[:80]} actual={str(res.rows)[:80]}")
 

@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-11-09T17:29:30",
+  "llm_mode": "real",
+  "total": 144,
+  "passed": 94,
+  "accuracy": 0.6528,
+  "by_category": {
+    "aggregation": {
+      "total": 32,
+      "passed": 16,
+      "accuracy": 0.5
+    },
+    "attribution": {
+      "total": 8,
+      "passed": 5,
+      "accuracy": 0.625
+    },
+    "join": {
+      "total": 24,
+      "passed": 11,
+      "accuracy": 0.4583
+    },
+    "safety": {
+      "total": 8,
+      "passed": 8,
+      "accuracy": 1.0
+    },
+    "single_filter": {
+      "total": 40,
+      "passed": 30,
+      "accuracy": 0.75
+    },
+    "subquery": {
+      "total": 16,
+      "passed": 16,
+      "accuracy": 1.0
+    },
+    "trend": {
+      "total": 16,
+      "passed": 8,
+      "accuracy": 0.5
+    }
+  },
+  "avg_elapsed_ms": 1136.47,
+  "avg_steps": 2.03,
+  "estimated_cost_yuan": 0.095332
+}
