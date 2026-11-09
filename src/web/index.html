@@ -180,6 +180,8 @@ table{border-collapse:collapse;width:100%;font-size:11.5px;margin:8px 0 2px}
 th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;color:var(--fg2)}
 th{background:var(--panel2);color:var(--muted);font-weight:600}
 .tbl-wrap{overflow:auto;max-height:290px}
+.chart-box{margin-top:8px;padding:10px 6px 4px;background:#1b1c22;border:1px solid #2c2d36;border-radius:10px}
+.chart-box svg{display:block;max-width:100%;height:auto}
 .pill{font-size:10.5px;color:var(--warn);background:#3a3020;border:1px solid #5b4a2b;
   border-radius:5px;padding:1px 7px;display:inline-block;margin-bottom:8px}
 .err{color:var(--danger);font-size:12.5px}
@@ -229,7 +231,7 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
   </div>
   <div class="tb-title">Agentic Data Analyst</div>
   <div class="tb-right">
-    <span class="chip" id="verBadge">v0.10</span>
+    <span class="chip" id="verBadge">v0.11</span>
     <span class="chip" id="modeBadge">mock</span>
     <span class="chip" id="srcBadge">synthetic</span>
     <button class="tb-btn" id="openWorkbench">工作台</button>
@@ -323,7 +325,7 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
       <div><strong id="kSmoke">15/15</strong><span>冒烟集（链路）</span></div>
       <div><strong id="kFull">64.6%</strong><span>真实模型 3 轮均值 ±0.7%</span></div>
       <div><strong id="kSafety">8/8</strong><span>危险语句拦截</span></div>
-      <div><strong id="kTests">22/22</strong><span>单元测试</span></div>
+      <div><strong id="kTests">27/27</strong><span>单元测试</span></div>
     </div>
     <div class="notice"><code>LLM_MODE=real</code> 连跑 3 轮：63.9% / 64.6% / 65.3%，均值 <strong>64.6% ± 0.7%</strong>（论文应引用这个）。同口径 mock 基线 23.6%，安全拦截 8/8，消融显示 Schema 检索贡献最大（−7.64pp）。</div>
     <button class="dbtn" id="evalBtn">现跑冒烟评估</button>
@@ -361,6 +363,7 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
       <div class="tl"><b>v0.8 · 2026-11-09 可选联网实时采集</b><p>Open-Meteo 写入独立 live.db，评估库保持冻结。</p></div>
       <div class="tl"><b>v0.9 · 2026-11-09 界面改版</b><p>对齐 Chat2DB 深色客户端：会话列表、对话式结果、工作台抽屉。</p></div>
       <div class="tl"><b>v0.10 · 2026-11-09 意图闸门</b><p>问「你好」「你是谁」不再返回无关数据表；非数据问题不生成 SQL、不连库、不调模型。</p></div>
+      <div class="tl"><b>v0.11 · 2026-11-09 结果自动配图</b><p>回答里直接出柱状/折线/饼图（纯 SVG，不依赖 ECharts 与 matplotlib），图与表并列可核对。</p></div>
     </div>
     <div class="notice">以后每完成一步：保证可运行 → 更新 CHANGELOG → <code>git commit</code> + 打 tag → 下方刷新即可看到新增文件与改动行数。</div>
   </section>
@@ -375,14 +378,14 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
     <pre>python scripts/serve.py
 python -m src.cli "3号教室昨天的平均温度是多少"
 python scripts/run_eval.py
-git diff v0.9 v0.10 --stat</pre>
+git diff v0.10 v0.11 --stat</pre>
     <p class="muted">只监听 127.0.0.1。当前默认 mock 完全离线；要现场演示真实模型需以 <code>LLM_MODE=real</code> 重启服务。</p>
   </section>
 </div>
 
 <script>
 /* 离线快照：由 scripts/build_snapshots.py 注入，静态打开页面也能点示例问题 */
-const SNAPSHOTS = {"3号教室昨天的平均温度是多少":{"question":"3号教室昨天的平均温度是多少","mode":"single","conclusion":"已返回 1 行结果，共 1 个字段。","columns":["avg_temperature"],"rows":[[22.58]],"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.2, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.09,"sql":""},{"step":2,"action":"text2sql","params":{"question":"3号教室昨天的平均温度是多少"},"result_summary":"source=mock attempts=1 rows=1 error=none","elapsed_ms":217.33,"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":244.65229990892112,"estimated_cost_yuan":0.0008,"fallback_used":false},"这周哪个教室空气质量最差，为什么":{"question":"这周哪个教室空气质量最差，为什么","mode":"agent","conclusion":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.08,"sql":""},{"step":2,"action":"text2sql","params":{"question":"这周哪个教室空气质量最差，为什么"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":9.35,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"},{"step":3,"action":"execute_sql","params":{"target":"3号教室"},"result_summary":"告警记录 2 条；error=none","elapsed_ms":2.46,"sql":"SELECT a.ts, a.type, a.level FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = ? ORDER BY a.ts DESC LIMIT 10;"},{"step":4,"action":"explain","params":{"rows":5},"result_summary":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","elapsed_ms":0.0,"sql":""}],"steps":4,"denied":false,"error":"","elapsed_ms":14.63949994649738,"estimated_cost_yuan":0.001386,"fallback_used":false},"报警次数最多的设备属于哪个楼层":{"question":"报警次数最多的设备属于哪个楼层","mode":"single","conclusion":"已返回 5 行结果，共 3 个字段。","columns":["floor","site_name","alarm_count"],"rows":[[1,"3号教室",2],[1,"1号教室",1],[2,"2号教室",1],[2,"4号教室",1],[3,"5号教室",1]],"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['alarm', 'device', 'site']；外键扩展 []；打分 {'alarm': 4.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.07,"sql":""},{"step":2,"action":"text2sql","params":{"question":"报警次数最多的设备属于哪个楼层"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":3.14,"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5"}],"steps":2,"denied":false,"error":"","elapsed_ms":5.781000014394522,"estimated_cost_yuan":0.00073,"fallback_used":false},"删除所有设备记录":{"question":"删除所有设备记录","mode":"single","conclusion":"已拦截危险语句，未执行。","columns":[],"rows":[],"sql":"DELETE FROM device;","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['device', 'site']；外键扩展 ['site']；打分 {'alarm': 0.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 0.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.07,"sql":""},{"step":2,"action":"text2sql","params":{"question":"删除所有设备记录"},"result_summary":"source=mock attempts=1 rows=0 error=只允许 SELECT 查询，写操作已拦截","elapsed_ms":0.03,"sql":"DELETE FROM device;"}],"steps":2,"denied":true,"error":"只允许 SELECT 查询，写操作已拦截","elapsed_ms":3.0759000219404697,"estimated_cost_yuan":0.000408,"fallback_used":false},"各教室本月的 CO2 均值排名":{"question":"各教室本月的 CO2 均值排名","mode":"single","conclusion":"已返回 5 行结果，共 2 个字段。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'v_site_air_quality', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 5.0, 'site': 2.0, 'v_site_air_quality': 0.2}","elapsed_ms":0.08,"sql":""},{"step":2,"action":"text2sql","params":{"question":"各教室本月的 CO2 均值排名"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":6.73,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":9.753699996508658,"estimated_cost_yuan":0.00081,"fallback_used":false}};
+const SNAPSHOTS = {"3号教室昨天的平均温度是多少":{"question":"3号教室昨天的平均温度是多少","mode":"single","conclusion":"已返回 1 行结果，共 1 个字段。","columns":["avg_temperature"],"rows":[[22.58]],"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.2, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.1,"sql":""},{"step":2,"action":"text2sql","params":{"question":"3号教室昨天的平均温度是多少"},"result_summary":"source=mock attempts=1 rows=1 error=none","elapsed_ms":223.71,"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":250.05209993105382,"estimated_cost_yuan":0.0008,"fallback_used":false,"chart":"table"},"这周哪个教室空气质量最差，为什么":{"question":"这周哪个教室空气质量最差，为什么","mode":"agent","conclusion":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.08,"sql":""},{"step":2,"action":"text2sql","params":{"question":"这周哪个教室空气质量最差，为什么"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":4.48,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"},{"step":3,"action":"execute_sql","params":{"target":"3号教室"},"result_summary":"告警记录 2 条；error=none","elapsed_ms":1.83,"sql":"SELECT a.ts, a.type, a.level FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = ? ORDER BY a.ts DESC LIMIT 10;"},{"step":4,"action":"explain","params":{"rows":5},"result_summary":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","elapsed_ms":0.0,"sql":""}],"steps":4,"denied":false,"error":"","elapsed_ms":9.2795001110062,"estimated_cost_yuan":0.001386,"fallback_used":false,"chart":"bar"},"报警次数最多的设备属于哪个楼层":{"question":"报警次数最多的设备属于哪个楼层","mode":"single","conclusion":"已返回 5 行结果，共 3 个字段。","columns":["floor","site_name","alarm_count"],"rows":[[1,"3号教室",2],[1,"1号教室",1],[2,"2号教室",1],[2,"4号教室",1],[3,"5号教室",1]],"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['alarm', 'device', 'site']；外键扩展 []；打分 {'alarm': 4.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.07,"sql":""},{"step":2,"action":"text2sql","params":{"question":"报警次数最多的设备属于哪个楼层"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":6.82,"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5"}],"steps":2,"denied":false,"error":"","elapsed_ms":9.899800061248243,"estimated_cost_yuan":0.00073,"fallback_used":false,"chart":"bar"},"删除所有设备记录":{"question":"删除所有设备记录","mode":"single","conclusion":"已拦截危险语句，未执行。","columns":[],"rows":[],"sql":"DELETE FROM device;","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['device', 'site']；外键扩展 ['site']；打分 {'alarm': 0.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 0.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.06,"sql":""},{"step":2,"action":"text2sql","params":{"question":"删除所有设备记录"},"result_summary":"source=mock attempts=1 rows=0 error=只允许 SELECT 查询，写操作已拦截","elapsed_ms":0.03,"sql":"DELETE FROM device;"}],"steps":2,"denied":true,"error":"只允许 SELECT 查询，写操作已拦截","elapsed_ms":2.937800018116832,"estimated_cost_yuan":0.000408,"fallback_used":false,"chart":"table"},"各教室本月的 CO2 均值排名":{"question":"各教室本月的 CO2 均值排名","mode":"single","conclusion":"已返回 5 行结果，共 2 个字段。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'v_site_air_quality', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 5.0, 'site': 2.0, 'v_site_air_quality': 0.2}","elapsed_ms":0.08,"sql":""},{"step":2,"action":"text2sql","params":{"question":"各教室本月的 CO2 均值排名"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":4.83,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":9.168499964289367,"estimated_cost_yuan":0.00081,"fallback_used":false,"chart":"bar"}};
 const $ = id => document.getElementById(id);
 const QUICK = [
   "3号教室昨天的平均温度是多少",
@@ -497,6 +500,94 @@ function commitSession() {
 }
 
 /* ── 结果卡片：把一次查询渲染成一条 AI 消息 ───────────────────── */
+/* 纯 SVG 自动配图：不引 ECharts / Chart.js，也不依赖服务端 matplotlib。
+   这样静态双击页面也能出图，答辩现场不赌网络和依赖。
+   图表类型由后端 choose_chart() 决定（line / bar / pie / table），
+   前端只负责按类型画，保证命令行、网页、离线快照三处判断一致。 */
+const C_BAR = "#8b5cf6", C_LINE = "#22d3ee", AXIS = "#3b3c45", TXT = "#9a9ba8";
+function svgChart(kind, columns, rows) {
+  if (!kind || kind === "table" || !rows || rows.length < 2 || !columns) return "";
+  const n = rows.length;
+  const num = v => { const x = Number(v); return Number.isFinite(x) ? x : null; };
+  // 数值列：可转数字的行数最多的那一列（时间戳、名称等字符串列会被排除）
+  let vi = -1, hit = 0;
+  for (let j = 0; j < columns.length; j++) {
+    const c = rows.reduce((s, r) => s + (num(r[j]) !== null ? 1 : 0), 0);
+    if (c > hit) { hit = c; vi = j; }
+  }
+  if (vi < 0 || hit < 2) return "";
+  // 标签列：优先取非数值列（教室名、时间戳），没有就用行号
+  const li = columns.findIndex((c, j) => j !== vi && rows.reduce((s, r) => s + (num(r[j]) === null ? 1 : 0), 0) >= n * 0.6);
+  const short = s => { s = String(s); const m = s.match(/\d{2}:\d{2}/); return m ? m[0] : (s.length > 8 ? s.slice(0, 8) : s); };
+  // 点数限制在 24 个以内，超出按等间隔抽样，避免柱子/折线挤成一团
+  const step = Math.max(1, Math.ceil(n / 24));
+  const pts = [];
+  for (let i = 0; i < n; i += step) pts.push({ label: li >= 0 ? short(rows[i][li]) : String(i + 1), v: num(rows[i][vi]) });
+  const vv = pts.map(p => p.v).filter(v => v !== null);
+  if (!vv.length) return "";
+  const W = 640, H = 230, PL = 46, PR = 14, PT = 16, PB = 30;
+  const iw = W - PL - PR, ih = H - PT - PB;
+  const max = Math.max(...vv, 0), min = Math.min(...vv, 0);
+  const span = (max - min) || Math.abs(max) || 1;
+  const y = v => PT + ih - ((v - min) / span) * ih;
+  const head = `<text x="${PL}" y="11" fill="${TXT}" font-size="10">${esc(columns[vi])}</text>`;
+  const axis = `<line x1="${PL}" y1="${PT + ih}" x2="${W - PR}" y2="${PT + ih}" stroke="${AXIS}"/>` +
+    `<text x="4" y="${PT + 4}" fill="${TXT}" font-size="9">${esc(max.toFixed(1))}</text>` +
+    `<text x="4" y="${PT + ih}" fill="${TXT}" font-size="9">${esc(min.toFixed(1))}</text>`;
+
+  if (kind === "pie") {
+    const total = vv.reduce((s, v) => s + Math.abs(v), 0) || 1;
+    const cx = 140, cy = H / 2, r = 82;
+    let a0 = -Math.PI / 2, i = 0;
+    const slices = pts.slice(0, 8).map(p => {
+      const a1 = a0 + Math.abs(p.v) / total * Math.PI * 2;
+      const x1 = cx + r * Math.cos(a0), y1 = cy + r * Math.sin(a0);
+      const x2 = cx + r * Math.cos(a1), y2 = cy + r * Math.sin(a1);
+      const big = a1 - a0 > Math.PI ? 1 : 0;
+      const d = `M${cx} ${cy} L${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 ${big} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`;
+      const color = ["#8b5cf6", "#22d3ee", "#f59e0b", "#34d399", "#f472b6", "#60a5fa", "#a78bfa", "#fbbf24"][i % 8];
+      a0 = a1; i++;
+      return `<path d="${d}" fill="${color}" opacity=".85"/>`;
+    }).join("");
+    const legend = pts.slice(0, 8).map((p, i) =>
+      `<rect x="270" y="${44 + i * 20}" width="10" height="10" rx="2" fill="${["#8b5cf6", "#22d3ee", "#f59e0b", "#34d399", "#f472b6", "#60a5fa", "#a78bfa", "#fbbf24"][i % 8]}"/>` +
+      `<text x="288" y="${53 + i * 20}" fill="${TXT}" font-size="11">${esc(p.label)}　${esc(p.v)}</text>`).join("");
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${slices}${legend}</svg>`;
+  }
+
+  if (kind === "line") {
+    const bw = iw / Math.max(pts.length - 1, 1);
+    const d = pts.map((p, i) => `${i ? "L" : "M"}${(PL + i * bw).toFixed(1)} ${y(p.v).toFixed(1)}`).join(" ");
+    const dots = pts.map((p, i) => `<circle cx="${(PL + i * bw).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="2.2" fill="${C_LINE}"/>`).join("");
+    const ticks = pts.map((p, i) => (pts.length <= 12 || i % Math.ceil(pts.length / 8) === 0)
+      ? `<text x="${(PL + i * bw).toFixed(1)}" y="${H - 10}" fill="${TXT}" font-size="9" text-anchor="middle">${esc(p.label)}</text>` : "").join("");
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${head}${axis}` +
+      `<path d="${d}" fill="none" stroke="${C_LINE}" stroke-width="2"/>${dots}${ticks}</svg>`;
+  }
+
+  // bar：柱子多时换成横向条形，避免标签重叠
+  const horiz = pts.length > 8;
+  if (horiz) {
+    const rowH = ih / pts.length;
+    const bars = pts.map((p, i) => {
+      const w = Math.max(2, (Math.abs(p.v) / (Math.abs(max) || 1)) * (iw - 90));
+      return `<rect x="${PL + 78}" y="${(PT + i * rowH + rowH * 0.18).toFixed(1)}" width="${w.toFixed(1)}" height="${(rowH * 0.62).toFixed(1)}" rx="2" fill="${C_BAR}" opacity=".85"/>` +
+        `<text x="${PL + 74}" y="${(PT + i * rowH + rowH * 0.6).toFixed(1)}" fill="${TXT}" font-size="10" text-anchor="end">${esc(p.label)}</text>` +
+        `<text x="${(PL + 82 + w).toFixed(1)}" y="${(PT + i * rowH + rowH * 0.6).toFixed(1)}" fill="${TXT}" font-size="9">${esc(p.v)}</text>`;
+    }).join("");
+    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${head}${bars}</svg>`;
+  }
+  const bw = iw / pts.length;
+  const bars = pts.map((p, i) => {
+    const top = p.v >= 0 ? y(p.v) : y(0);
+    const hgt = Math.max(1, Math.abs(y(p.v) - y(0)));
+    return `<rect x="${(PL + i * bw + bw * 0.18).toFixed(1)}" y="${top.toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${hgt.toFixed(1)}" rx="2" fill="${C_BAR}" opacity=".85"/>` +
+      `<text x="${(PL + i * bw + bw / 2).toFixed(1)}" y="${H - 10}" fill="${TXT}" font-size="9" text-anchor="middle">${esc(p.label)}</text>` +
+      `<text x="${(PL + i * bw + bw / 2).toFixed(1)}" y="${(top - 4).toFixed(1)}" fill="${TXT}" font-size="9" text-anchor="middle">${esc(p.v)}</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${head}${axis}${bars}</svg>`;
+}
+
 function resultHtml(res, offline) {
   if (!res) return `<div class="err">服务未响应。</div>`;
   if (res.error && !res.sql && !res.rows) return `<div class="err">${esc(res.error)}</div>`;
@@ -515,6 +606,9 @@ function resultHtml(res, offline) {
   if (res.denied && res.error) h += `<p class="err" style="margin-top:8px">${esc(res.error)}</p>`;
   else if (res.error) h += `<p class="err" style="margin-top:8px">执行失败：${esc(res.error)}</p>`;
   if (res.rows && res.rows.length) {
+    // 先图后表：图给直观印象，表给精确数字，两者都要，缺一不可核对
+    const chart = svgChart(res.chart, res.columns || [], res.rows);
+    if (chart) h += `<details open><summary>结果图表 · ${esc(res.chart)}</summary><div class="chart-box">${chart}</div></details>`;
     h += `<details open><summary>结果表格 · ${res.rows.length} 行</summary><div class="tbl-wrap"><table><tr>` +
          (res.columns || []).map(c => `<th>${esc(c)}</th>`).join("") + "</tr>" +
          res.rows.slice(0, 12).map(r => "<tr>" + r.map(v => `<td>${esc(v)}</td>`).join("") + "</tr>").join("") +

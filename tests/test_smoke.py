@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.agent.runtime import run  # noqa: E402  （须在 sys.path 调整之后导入）
 from src.db.core import connect, init_database, introspect  # noqa: E402
 from src.schema_retrieval.catalog import retrieve  # noqa: E402
+from src.presentation.render import choose_chart  # noqa: E402
 from src.sql.validator import validate  # noqa: E402
 
 
@@ -255,6 +256,42 @@ class TestIntentGate(unittest.TestCase):
         self.assertGreaterEqual(len(questions), 140)
         blocked = [q for q in questions if classify(q).kind != "data_query"]
         self.assertEqual(blocked, [], f"被闸门误拦的评估题：{blocked[:5]}")
+
+
+class TestChartSelection(unittest.TestCase):
+    """自动配图（v0.11）：`to_dict()` 必须带 chart 字段，否则网页只出表不出图。
+
+    这组用例守两件事：
+    1. 排名类问题判 bar、时序类判 line，与命令行/网页共用同一判断；
+    2. 单行结果、拒答（gate）一律判 table —— 单行画图没有信息量，
+       给拒答画图更是误导（会让人以为系统查到了数据）。
+    """
+
+    def test_ranking_question_gets_bar(self) -> None:
+        r = run("各教室 CO2 均值排名")
+        self.assertEqual(r.to_dict()["chart"], "bar")
+
+    def test_trend_question_gets_line(self) -> None:
+        r = run("按小时统计今天的温度变化")
+        self.assertEqual(r.to_dict()["chart"], "line")
+
+    def test_single_row_gets_table(self) -> None:
+        # 单行单列结果画图无意义，必须退回表格
+        self.assertEqual(choose_chart("平均温度", ["avg"], [(22.5,)]), "table")
+
+    def test_gate_result_gets_no_chart(self) -> None:
+        r = run("你好")
+        d = r.to_dict()
+        self.assertEqual(d["mode"], "gate")
+        self.assertEqual(d["chart"], "table")
+        self.assertEqual(d["rows"], [])
+
+    def test_chart_field_does_not_break_other_consumers(self) -> None:
+        # 评估脚本读的是手写字段，不依赖 to_dict；这里确认新增字段不影响既有键
+        d = run("列出所有设备型号").to_dict()
+        for key in ("question", "sql", "columns", "rows", "conclusion", "steps", "trace"):
+            self.assertIn(key, d)
+        self.assertIsInstance(d["chart"], str)
 
 
 if __name__ == "__main__":

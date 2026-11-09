@@ -74,8 +74,22 @@ class AgentResult:
     fallback_used: bool = False
 
     def to_dict(self) -> dict:
-        """转普通 dict，供 CLI 的 --json 与评估脚本使用。"""
-        return asdict(self)
+        """转普通 dict，供 CLI 的 --json、网页接口与离线快照使用。
+
+        额外补一个 ``chart`` 字段：由 ``presentation.render.choose_chart``
+        按「问题语义 + 结果形态」给出建议图表类型（line / bar / pie / table）。
+        放在这里而不是各调用方各算一遍，是为了保证命令行、网页、快照三条
+        路径的配图判断完全一致——否则同一问题在三处画出不同的图，
+        答辩时解释不清。``table`` 表示画图没有信息量（单行结果或不适合配图），
+        前端据此只显示表格。
+
+        用函数内延迟导入，避免 presentation 层与 agent 层互相 import 成环。
+        """
+        from ..presentation.render import choose_chart
+
+        data = asdict(self)
+        data["chart"] = choose_chart(self.question, self.columns, self.rows)
+        return data
 
 
 def _is_analysis(question: str) -> bool:
