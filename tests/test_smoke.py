@@ -169,5 +169,30 @@ class TestSemanticRetrieval(unittest.TestCase):
             settings.enable_semantic_retrieval = original
 
 
+class TestLiveFeed(unittest.TestCase):
+    """公开数据采集的纯函数测试（v0.8，不联网）。
+
+    故意只测字段映射与时区转换：真实网络请求交给 refresh_live.py，
+    单测在任何离线环境、CI 里都必须能跑，不能依赖外部 API 可用性。
+    """
+
+    def test_map_row_no_fabricated_columns(self) -> None:
+        from src.db.live_feed import map_row
+        obs = {"time": "2026-11-09T12:00", "temperature": 11.7,
+               "humidity": 38.0, "pm25": 6.3}
+        row = map_row(3, obs)
+        self.assertEqual(row[0], 3)
+        self.assertEqual(row[1], "2026-11-09 20:00:00")  # UTC -> UTC+8
+        self.assertEqual(row[2], 11.7)
+        self.assertEqual(row[3], 38.0)
+        self.assertIsNone(row[4])   # co2：公开源没有，保持 NULL
+        self.assertIsNone(row[5])   # tvoc：同上，绝不推算
+        self.assertEqual(row[6], 6.3)
+
+    def test_to_local_handles_midnight(self) -> None:
+        from src.db.live_feed import _to_local
+        self.assertEqual(_to_local("2026-11-09T16:30"), "2026-11-10 00:30:00")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
