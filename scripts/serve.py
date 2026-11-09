@@ -17,6 +17,9 @@
            --> GET /api/ablation 现跑五组消融，返回 delta 报告
            --> GET /api/changes 读 git log / tag / diff --stat，展示代码变化
 
+v0.9：前端改为单文件深色对话式界面（src/web/index.html），API 契约保持不变，
+服务端无需改动；会话历史由浏览器 localStorage 管理，不落盘、不入库。
+
 所有业务判断仍在 src/ 里，本文件只做参数解析、调用与 JSON 序列化。
 """
 from __future__ import annotations
@@ -40,7 +43,7 @@ from src.evaluation.ablation import run_ablation  # noqa: E402
 from src.evaluation.runner import evaluate, load_cases  # noqa: E402
 
 WEB_DIR = ROOT / "src" / "web"
-VERSION = "v0.8"
+VERSION = "v0.9"
 
 
 def _git_text(args: list[str]) -> str:

@@ -3,143 +3,397 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>毕设演示 v0.3 · 数据分析 Agent</title>
+<title>Agentic Data Analyst · 数据分析 Agent</title>
 <style>
-:root{--bg:#ffffff;--fg:#1f2328;--muted:#5f6368;--line:#d8dce1;--soft:#f4f7fa;--accent:#0b5cad;--ok:#0f6e56;--warn:#9a4b00;--danger:#a32d2d}
+/* ── 视觉基调：对齐 Chat2DB 桌面客户端的深色极简风格 ─────────────────
+   --bg 主区 / --bg2 标题栏与侧栏 / --panel 输入与卡片
+   所有面板都是深色，文字为浅色，紫为唯一强调色。                    */
+:root{
+  --bg:#1c1d21; --bg2:#18191d; --rail:#151619; --panel:#24252b;
+  --panel2:#2a2b32; --line:#34353d; --line2:#3d3e47;
+  --fg:#e9e9ef; --fg2:#c7c8d0; --muted:#858894; --faint:#636570;
+  --accent:#8b5cf6; --accent2:#a78bfa; --accent-soft:#322a4d;
+  --ok:#5fd3a0; --warn:#f0b96b; --danger:#f08a8a;
+}
 *{box-sizing:border-box}
-body{font-family:"Microsoft YaHei","Segoe UI",sans-serif;background:var(--bg);color:var(--fg);margin:0;line-height:1.6}
-header{border-bottom:1px solid var(--line);padding:18px 28px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-h1{font-size:19px;margin:0;font-weight:600}
-.badge{background:var(--soft);border:1px solid var(--line);border-radius:20px;padding:2px 11px;font-size:12px;color:var(--accent)}
-.status{margin-left:auto;font-size:12px;color:var(--muted)}
-main{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(320px,1fr);gap:20px;padding:20px 28px 48px;max-width:1500px;margin:0 auto}
-section{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:18px}
-h2{font-size:15px;margin:0 0 12px;color:var(--accent);font-weight:600}
-h3{font-size:13px;margin:16px 0 8px;font-weight:600}
-label{font-size:12px;color:var(--muted)}
-input[type=text],select{width:100%;padding:9px 11px;border:1px solid var(--line);border-radius:6px;font-size:13px;background:#fff;color:var(--fg);margin-top:5px}
-button{border:1px solid var(--line);background:var(--soft);color:var(--fg);border-radius:6px;padding:7px 13px;font-size:12px;cursor:pointer;margin:5px 5px 0 0}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
-button:hover{filter:brightness(.96)}
-.row{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
-.row>div{flex:1;min-width:150px}
-pre{background:var(--soft);border:1px solid var(--line);border-radius:6px;padding:11px;font-size:12px;overflow:auto;white-space:pre-wrap;word-break:break-word;margin:8px 0}
-table{border-collapse:collapse;width:100%;font-size:12px;margin:8px 0}
-th,td{border:1px solid var(--line);padding:6px 8px;text-align:left}
-th{background:var(--soft);font-weight:600}
-.muted{color:var(--muted);font-size:12px}
-.ok{color:var(--ok);font-weight:600}.warn{color:var(--warn);font-weight:600}.danger{color:var(--danger);font-weight:600}
-.conclusion{background:#eef6ff;border-left:4px solid var(--accent);padding:10px 13px;border-radius:0 6px 6px 0;font-size:13px;margin:10px 0}
-.timeline{border-left:2px solid var(--line);padding-left:14px;margin:6px 0}
-.tl{position:relative;margin-bottom:14px}
-.tl:before{content:"";position:absolute;left:-19px;top:6px;width:8px;height:8px;border-radius:50%;background:var(--accent)}
-.tl b{font-size:13px}.tl p{margin:3px 0 0;font-size:12px;color:var(--muted)}
-.kpi{display:flex;gap:10px;flex-wrap:wrap;margin:10px 0}
-.kpi>div{flex:1;min-width:96px;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
-.kpi strong{display:block;font-size:18px;color:var(--accent)}
-.kpi span{font-size:11px;color:var(--muted)}
-.notice{background:#fff8ed;border-left:4px solid var(--warn);padding:9px 12px;font-size:12px;border-radius:0 6px 6px 0;margin:10px 0}
-.hidden{display:none}
-footer{border-top:1px solid var(--line);padding:14px 28px;font-size:12px;color:var(--muted)}
-@media(max-width:900px){main{grid-template-columns:1fr}}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+  font-size:14px;line-height:1.6;overflow:hidden}
+button,input,textarea,select{font-family:inherit}
+button{cursor:pointer;color:inherit}
+code,pre{font-family:"Cascadia Code","Consolas","SFMono-Regular",monospace}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:#3b3c45;border-radius:6px}
+::-webkit-scrollbar-track{background:transparent}
+
+/* 顶部标题栏：居中产品名，右侧是真实状态而不是假的窗口按钮 */
+.titlebar{height:38px;background:var(--bg2);border-bottom:1px solid var(--line);
+  display:flex;align-items:center;position:relative;padding:0 12px;user-select:none}
+.tb-left,.tb-right{display:flex;align-items:center;gap:8px;z-index:1}
+.tb-right{margin-left:auto}
+.tb-title{position:absolute;left:0;right:0;text-align:center;font-size:12.5px;
+  font-weight:600;letter-spacing:.3px;color:var(--fg2);pointer-events:none}
+.tb-ico{width:26px;height:26px;border:0;background:transparent;border-radius:6px;
+  color:var(--muted);font-size:15px;display:grid;place-items:center}
+.tb-ico:hover{background:var(--panel);color:var(--fg)}
+.logo{width:22px;height:22px;border-radius:6px;background:var(--accent);
+  display:grid;place-items:center;font-size:12px;color:#fff;font-weight:700}
+.chip{font-size:11px;color:var(--muted);background:var(--panel);border:1px solid var(--line);
+  border-radius:20px;padding:2px 9px;white-space:nowrap}
+.chip.on{color:var(--accent2);border-color:#4b3d70;background:var(--accent-soft)}
+.tb-btn{background:var(--panel);border:1px solid var(--line);border-radius:7px;
+  padding:4px 11px;font-size:11.5px;color:var(--fg2)}
+.tb-btn:hover{border-color:var(--accent);color:#fff}
+
+.app{display:flex;height:calc(100vh - 38px)}
+
+/* 最左窄图标栏 */
+.rail{width:52px;flex:none;background:var(--rail);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;justify-content:space-between;align-items:center;
+  padding:12px 0 14px}
+.rail-top,.rail-bottom{display:flex;flex-direction:column;align-items:center;gap:8px}
+.rail-logo{width:30px;height:30px;border-radius:9px;background:var(--accent);
+  display:grid;place-items:center;color:#fff;font-weight:700;font-size:14px;margin-bottom:8px}
+.rail-ic{width:32px;height:32px;border:0;background:transparent;border-radius:8px;
+  color:var(--faint);display:grid;place-items:center;font-size:15px}
+.rail-ic:hover{background:var(--panel);color:var(--fg2)}
+.rail-ic.active{background:var(--accent-soft);color:var(--accent2)}
+.rail-ic svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round}
+.avatar{width:27px;height:27px;border-radius:50%;background:var(--accent);
+  display:grid;place-items:center;color:#fff;font-size:11px;font-weight:700;margin-top:6px}
+
+/* 会话列表侧栏 */
+.sidebar{width:222px;flex:none;background:var(--bg2);border-right:1px solid var(--line);
+  display:flex;flex-direction:column;overflow:hidden;transition:width .18s ease}
+.sidebar.collapsed{width:0;border-right:0}
+.sb-head{display:flex;align-items:center;gap:8px;padding:14px 12px 10px}
+.newchat{flex:1;background:var(--accent);border:0;border-radius:8px;color:#fff;
+  font-size:12.5px;font-weight:600;padding:8px 10px;text-align:left;white-space:nowrap}
+.newchat:hover{background:#9b6dfb}
+.icon-btn{width:30px;height:30px;border:0;background:transparent;border-radius:7px;
+  color:var(--muted);display:grid;place-items:center;font-size:14px}
+.icon-btn:hover{background:var(--panel);color:var(--fg)}
+.icon-btn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8}
+.search{margin:0 12px 8px;padding:7px 9px;background:var(--panel);border:1px solid var(--line);
+  border-radius:7px;color:var(--fg);font-size:12px;outline:none}
+.search:focus{border-color:var(--accent)}
+.sb-label{font-size:11px;color:var(--faint);padding:12px 14px 6px;letter-spacing:.5px;
+  display:flex;justify-content:space-between}
+.sessions{flex:1;overflow:auto;padding:0 8px}
+.sess{display:flex;align-items:center;gap:8px;padding:8px 9px;border-radius:7px;
+  cursor:pointer;color:var(--fg2);font-size:12.5px;margin-bottom:2px}
+.sess:hover{background:var(--panel)}
+.sess.active{background:var(--accent-soft);color:#fff}
+.sess .t{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sess .tm{font-size:10.5px;color:var(--faint)}
+.sess .del{opacity:0;color:var(--faint);font-size:14px;border:0;background:transparent;padding:0 2px}
+.sess:hover .del{opacity:1}
+.sess .del:hover{color:var(--danger)}
+.quick{padding:0 10px 10px;overflow:auto;max-height:210px}
+.quick button{display:block;width:100%;text-align:left;background:transparent;
+  border:1px solid transparent;border-radius:7px;color:var(--muted);
+  font-size:11.5px;padding:6px 8px;margin-bottom:2px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.quick button:hover{background:var(--panel);border-color:var(--line);color:var(--fg2)}
+.sb-foot{padding:10px 13px;border-top:1px solid var(--line);color:var(--faint);
+  font-size:10.5px;line-height:1.5;max-height:74px;overflow:auto}
+
+/* 主区 */
+.main{flex:1;min-width:0;position:relative;overflow:hidden}
+.hero{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;padding:20px;
+  transform:translateY(-26px)}
+.hero.hidden,.thread.hidden{display:none}
+.hero-inner{width:min(640px,100%)}
+.hi{color:var(--accent2);font-size:14px;margin-bottom:8px;letter-spacing:.5px}
+.hero h1{font-size:31px;font-weight:700;letter-spacing:.5px;margin:0 0 8px;color:#f4f4f8}
+.hero .sub{color:var(--muted);font-size:12.5px;margin:0 0 26px}
+.hint{color:var(--faint);font-size:11px;margin-top:14px;text-align:center}
+.hint code{background:var(--panel);border:1px solid var(--line);border-radius:4px;
+  padding:1px 5px;font-size:10.5px}
+.thread{position:absolute;inset:0;overflow:auto;padding:26px 0 130px}
+.thread-inner{width:min(860px,100%);margin:0 auto;padding:0 28px}
+
+/* 输入框：欢迎页时嵌在中部，有对话时停靠底部 */
+.composer{width:100%;background:var(--panel);border:1px solid var(--line2);
+  border-radius:14px;box-shadow:0 8px 30px rgba(0,0,0,.28)}
+.composer:focus-within{border-color:#5b4a8a}
+.composer textarea{width:100%;min-height:62px;max-height:150px;resize:none;
+  background:transparent;border:0;outline:none;color:var(--fg);
+  padding:14px 16px 4px;font-size:13.5px;line-height:1.5;display:block}
+.composer textarea::placeholder{color:var(--faint)}
+.composer-bar{display:flex;align-items:center;justify-content:space-between;
+  gap:8px;padding:4px 10px 9px}
+.cb-left,.cb-right{display:flex;align-items:center;gap:6px}
+.mini{width:26px;height:26px;border:1px solid var(--line);background:transparent;
+  border-radius:7px;color:var(--muted);font-size:14px;display:grid;place-items:center;
+  line-height:1}
+.mini:hover{background:var(--panel2);color:var(--fg)}
+.cb-hint{font-size:10.5px;color:var(--faint);margin-left:4px;max-width:230px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#mode{background:transparent;border:0;color:var(--muted);font-size:11.5px;
+  outline:none;padding:3px 2px;cursor:pointer}
+#mode option{background:var(--panel);color:var(--fg)}
+.send{width:30px;height:30px;border:0;border-radius:8px;background:var(--accent);
+  color:#fff;display:grid;place-items:center}
+.send:hover{background:#9b6dfb}
+.send:disabled{opacity:.45;cursor:default}
+.send svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.9;
+  stroke-linecap:round;stroke-linejoin:round}
+.dock{position:absolute;left:0;right:0;bottom:0;padding:14px 28px 18px;
+  background:linear-gradient(to top,var(--bg) 62%,transparent)}
+.dock:empty{display:none}
+.dock .composer{max-width:860px;margin:0 auto}
+
+/* 对话消息 */
+.msg{display:flex;gap:12px;margin-bottom:22px;align-items:flex-start}
+.msg.you{flex-direction:row-reverse}
+.msg .av{width:28px;height:28px;flex:none;border-radius:8px;display:grid;
+  place-items:center;font-size:12px;font-weight:700}
+.msg.you .av{background:var(--accent);color:#fff}
+.msg.ai .av{background:var(--panel2);color:var(--accent2);border:1px solid var(--line)}
+.bubble{max-width:calc(100% - 44px);min-width:0}
+.msg.you .bubble{background:var(--accent-soft);border:1px solid #4b3d70;
+  border-radius:12px 3px 12px 12px;padding:9px 14px;color:#f0edff;font-size:13px}
+.msg.ai .bubble{background:var(--panel);border:1px solid var(--line);
+  border-radius:3px 12px 12px 12px;padding:13px 16px;flex:1}
+.meta{font-size:10.5px;color:var(--faint);margin-bottom:9px}
+.answer{font-size:13.5px;color:var(--fg);line-height:1.75}
+.badge-inline{display:inline-block;font-size:10.5px;border-radius:5px;
+  padding:1px 7px;margin-right:6px;border:1px solid var(--line);color:var(--muted)}
+.badge-inline.ok{color:var(--ok);border-color:#2f5b48}
+.badge-inline.danger{color:var(--danger);border-color:#6b3a3a}
+details{border-top:1px solid var(--line);margin-top:10px;padding-top:8px}
+details:first-of-type{margin-top:12px}
+summary{cursor:pointer;font-size:11.5px;color:var(--muted);list-style:none;
+  padding:3px 0;user-select:none}
+summary::-webkit-details-marker{display:none}
+summary:before{content:"▸ ";color:var(--accent2)}
+details[open] summary:before{content:"▾ "}
+summary:hover{color:var(--fg2)}
+pre{background:#1a1b20;border:1px solid var(--line);border-radius:7px;
+  padding:10px 12px;font-size:11.5px;color:#c9d3e6;overflow:auto;
+  white-space:pre-wrap;word-break:break-word;margin:7px 0 2px}
+table{border-collapse:collapse;width:100%;font-size:11.5px;margin:8px 0 2px}
+th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;color:var(--fg2)}
+th{background:var(--panel2);color:var(--muted);font-weight:600}
+.tbl-wrap{overflow:auto;max-height:290px}
+.pill{font-size:10.5px;color:var(--warn);background:#3a3020;border:1px solid #5b4a2b;
+  border-radius:5px;padding:1px 7px;display:inline-block;margin-bottom:8px}
+.err{color:var(--danger);font-size:12.5px}
+
+/* 工作台抽屉：承载原先右栏的全部信息，主区因此能保持极简 */
+.mask{position:fixed;inset:38px 0 0;background:rgba(0,0,0,.46);z-index:20;display:none}
+.mask.show{display:block}
+.drawer{position:fixed;top:38px;right:0;bottom:0;width:min(460px,94vw);
+  background:var(--bg2);border-left:1px solid var(--line);z-index:21;
+  transform:translateX(101%);transition:transform .22s ease;overflow:auto;padding:18px 20px 40px}
+.drawer.open{transform:translateX(0)}
+.dr-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.dr-head h2{font-size:15px;margin:0;font-weight:600}
+.dr-close{border:0;background:transparent;color:var(--muted);font-size:19px}
+.dr-close:hover{color:var(--fg)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:11px;
+  padding:13px 15px;margin-bottom:14px}
+section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600}
+.muted{color:var(--muted);font-size:11.5px}
+.notice{background:#2c2618;border-left:3px solid var(--warn);color:#e7d6b4;
+  padding:9px 11px;font-size:11.5px;border-radius:0 6px 6px 0;margin:9px 0}
+.notice code{color:#f0d9a8}
+.kpi{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:8px 0}
+.kpi>div{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:9px 11px}
+.kpi strong{display:block;font-size:17px;color:var(--accent2)}
+.kpi span{font-size:10.5px;color:var(--muted)}
+.dbtn{background:var(--panel2);border:1px solid var(--line);border-radius:7px;
+  padding:6px 11px;font-size:11.5px;color:var(--fg2);margin:4px 6px 0 0}
+.dbtn:hover{border-color:var(--accent);color:#fff}
+.hidden{display:none!important}
+.timeline{border-left:2px solid var(--line);padding-left:13px;margin:4px 0}
+.tl{position:relative;margin-bottom:11px;cursor:default}
+.tl:before{content:"";position:absolute;left:-18px;top:6px;width:7px;height:7px;
+  border-radius:50%;background:var(--accent)}
+.tl b{font-size:11.5px;color:var(--fg2)}.tl p{margin:2px 0 0;font-size:10.5px;color:var(--faint)}
+#changes{max-height:190px;font-size:10.5px;color:var(--muted)}
+@media(max-width:820px){.sidebar{width:180px}.hero h1{font-size:25px}.rail{width:44px}}
+@media(max-width:620px){.sidebar{display:none}.hero h1{font-size:22px}}
 </style>
 </head>
 <body>
 
-<header>
-  <h1>物联网监测数据分析 Agent</h1>
-  <span class="badge" id="verBadge">v0.8</span>
-  <span class="badge" id="modeBadge">mock 模式</span>
-  <span class="status" id="statusText">正在读取状态…</span>
-</header>
-
-<main>
-  <div>
-    <section>
-      <h2>提问演示</h2>
-      <div>
-        <button data-q="3号教室昨天的平均温度是多少">单轮查询</button>
-        <button data-q="这周哪个教室空气质量最差，为什么">多步归因</button>
-        <button data-q="报警次数最多的设备属于哪个楼层">三表 JOIN</button>
-        <button data-q="删除所有设备记录">安全拦截</button>
-        <button data-q="各教室本月的 CO2 均值排名">分组聚合</button>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <div><label>自然语言问题</label><input type="text" id="q" placeholder="例如：按小时统计今天的 CO2 变化"></div>
-        <div style="max-width:150px"><label>执行模式</label>
-          <select id="mode"><option value="auto">auto 自动</option><option value="single">single 单轮</option><option value="agent">agent 多步</option></select>
-        </div>
-        <div style="max-width:110px"><button class="primary" id="askBtn" style="width:100%;padding:9px">查询</button></div>
-      </div>
-      <div class="notice" id="offlineTip">离线快照模式：点上方快捷问题可查看预录的真实运行结果；启动 <code>python scripts/serve.py</code> 后可实时提问任意问题。</div>
-    </section>
-
-    <section id="resultSection">
-      <h2>结果</h2>
-      <div id="result"><p class="muted">点上面的快捷问题，或输入后点「查询」。</p></div>
-    </section>
+<div class="titlebar">
+  <div class="tb-left">
+    <button class="tb-ico" id="railToggle" title="折叠/展开侧栏">☰</button>
+    <div class="logo" title="Agentic Data Analyst">✦</div>
   </div>
-
-  <div>
-    <section>
-      <h2>版本演进（每步都有可用版本）</h2>
-      <div class="timeline">
-        <div class="tl"><b>v0.1 · 2026-11-07 基线</b><p>七个模块骨架、命令行、15 条冒烟集、9 个单测。能「一句话进、结果出」。</p></div>
-        <div class="tl"><b>v0.2 · 2026-11-07 第 2 增量</b><p>104 条正式评估集、五种判定口径、五组消融开关、GitHub Actions 回归门禁。</p></div>
-        <div class="tl"><b>v0.3 · 2026-11-08 可交互版本</b><p>零依赖浏览器界面、版本可视化、Git 提交与标签，可直接看代码变化。</p></div>
-        <div class="tl"><b>v0.3.1 · 2026-11-08 离线也能点</b><p>内嵌 5 个快捷问题的真实结果快照，不启动服务也能提问查看；启动服务后实时优先。</p></div>
-        <div class="tl"><b>v0.3.2 · 2026-11-08 动态 diff</b><p>代码变化区自动取最近两个 tag 对比，每打一个新标签刷新即可看到。</p></div>
-        <div class="tl"><b>v0.3.3 · 2026-11-09 项目标识统一</b><p>本地目录与云端仓库统一为 agentic-data-analyst，文档与脚本注释同步更新。</p></div>
-        <div class="tl"><b>v0.4 · 2026-11-09 UCI 真实数据接入</b><p>接入 UCI Occupancy Detection 20560 条真实记录，两种数据源可切换；页面状态栏显示当前数据源。</p></div>
-        <div class="tl"><b>v0.4.1 · 2026-11-09 评估口径独立</b><p>标准 SQL 改为独立人工标注（18 个原型、144 条），与生成器解耦；回归门禁基线按新口径固化。</p></div>
-        <div class="tl"><b>v0.5 · 2026-11-09 真实模型零依赖接入</b><p>模型调用改用标准库实现，不再依赖 SDK；密钥只存本地 .env 且被 Git 忽略，默认仍为离线 mock。</p></div>
-        <div class="tl"><b>v0.6 · 2026-11-09 真实模型实测</b><p>修正三处测量偏差后实测 65.3%（94/144），逐层消融产出非零 delta，Schema 检索贡献 −7.64pp。</p></div>
-        <div class="tl"><b>v0.7 · 2026-11-09 补做 B 类</b><p>3 轮重复实验给出 64.6% ± 0.7%；补指标差距分析、轻量语义检索对照、LangGraph 未实施说明。</p></div>
-        <div class="tl"><b>v0.8 · 2026-11-09 可选联网实时采集</b><p>Open-Meteo 公开数据写入独立 live.db，支持定时自动刷新；评估库 bishe.db 保持冻结。</p></div>
-      </div>
-      <h3>代码变化（来自 git）</h3>
-      <pre id="changes">读取中…</pre>
-      <div class="notice">以后每完成一步：保证可运行 → 更新 CHANGELOG → <code>git commit</code> + 打 tag → 这里刷新即可看到新增文件与改动行数。</div>
-    </section>
-
-    <section>
-      <h2>当前评估数字</h2>
-      <div class="kpi">
-        <div><strong id="kSmoke">15/15</strong><span>冒烟集（链路）</span></div>
-        <div><strong id="kFull">64.6%</strong><span>真实模型 3 轮均值 ±0.7%</span></div>
-        <div><strong id="kSafety">8/8</strong><span>危险语句拦截</span></div>
-        <div><strong id="kTests">12/12</strong><span>单元测试</span></div>
-      </div>
-      <div class="notice"><code>LLM_MODE=real</code> 连跑 3 轮：63.9% / 64.6% / 65.3%，均值 <strong>64.6% ± 0.7%</strong>（论文应引用这个）。同口径 mock 基线 23.6%，安全拦截 8/8，消融显示 Schema 检索贡献最大（−7.64pp）。</div>
-      <button id="evalBtn">现跑冒烟评估</button>
-      <button id="ablBtn">现跑五组消融</button>
-      <pre id="evalOut" class="hidden"></pre>
-    </section>
-
-    <section>
-      <h2>消融实验（静态快照）</h2>
-      <table>
-        <tr><th>配置</th><th>准确率</th><th>Δ</th><th>上下文字符</th></tr>
-        <tr><td>full</td><td>64.6%</td><td>—</td><td>445</td></tr>
-        <tr><td>no_fk_expansion</td><td>61.8%</td><td>−2.77pp</td><td>330</td></tr>
-        <tr><td>no_retrieval</td><td>56.9%</td><td>−7.64pp</td><td>809</td></tr>
-        <tr><td>no_self_correction</td><td>62.5%</td><td>−2.08pp</td><td>445</td></tr>
-        <tr><td>minimal</td><td>57.6%</td><td>−6.94pp</td><td>809</td></tr>
-      </table>
-      <p class="muted">真实模型下 delta 不再为 0：Schema 检索贡献最大（−7.64pp）。full 组 64.6% 与单独评估 65.3% 差 1 题，是 LLM 非确定性的实测证据，论文应多次运行取均值。</p>
-    </section>
+  <div class="tb-title">Agentic Data Analyst</div>
+  <div class="tb-right">
+    <span class="chip" id="verBadge">v0.9</span>
+    <span class="chip" id="modeBadge">mock</span>
+    <span class="chip" id="srcBadge">synthetic</span>
+    <button class="tb-btn" id="openWorkbench">工作台</button>
   </div>
-</main>
+</div>
 
-<footer>
-  启动：<code>python scripts/serve.py</code>　|　命令行：<code>python -m src.cli "问题"</code>　|　代码变化：<code>git diff v0.2 v0.3 --stat</code>　|　本项目只监听 127.0.0.1
-</footer>
+<div class="app">
+  <nav class="rail">
+    <div class="rail-top">
+      <div class="rail-logo" title="Agentic Data Analyst">A</div>
+      <button class="rail-ic active" data-panel="chat" title="对话">
+        <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 2 1.2-3.6A8 8 0 1 1 21 12z"/></svg>
+      </button>
+      <button class="rail-ic" data-panel="workbench" title="工作台 / 实验数据">
+        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      </button>
+      <button class="rail-ic" data-panel="data" title="数据源说明">
+        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+      </button>
+    </div>
+    <div class="rail-bottom">
+      <button class="rail-ic" id="railHelp" title="命令与快捷键">&gt;_</button>
+      <div class="avatar" title="本地演示账号">W</div>
+    </div>
+  </nav>
+
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-head">
+      <button class="newchat" id="newChat">＋ 新建对话</button>
+      <button class="icon-btn" id="searchBtn" title="搜索对话">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      </button>
+    </div>
+    <input class="search hidden" id="search" placeholder="搜索对话…">
+    <div class="sb-label"><span>近期对话</span><span id="sessCount">0</span></div>
+    <div class="sessions" id="sessions"></div>
+    <div class="sb-label"><span>快捷示例</span></div>
+    <div class="quick" id="quick"></div>
+    <div class="sb-foot" id="statusText">正在读取状态…</div>
+  </aside>
+
+  <main class="main">
+    <div class="hero" id="hero">
+      <div class="hero-inner">
+        <div class="hi">✦ 你好</div>
+        <h1>准备好向数据提问了吗？</h1>
+        <p class="sub">用一句自然语言查询数据库，Agent 自动找表、生成 SQL、校验执行并解释结果。</p>
+        <div id="heroSlot"></div>
+        <div class="hint">左侧「快捷示例」有 5 个可点的问题　·　<code>Ctrl + K</code> 聚焦　·　<code>Enter</code> 发送</div>
+      </div>
+    </div>
+    <div class="thread hidden" id="thread"><div class="thread-inner" id="threadInner"></div></div>
+    <div class="dock" id="dockSlot"></div>
+  </main>
+</div>
+
+<!-- 输入框是同一个 DOM 节点，在欢迎页中部与对话页底部之间移动，事件监听不丢失 -->
+<div class="composer" id="composer">
+  <textarea id="q" rows="2" placeholder="输入一句自然语言问题… Ctrl + K 聚焦，Enter 发送"></textarea>
+  <div class="composer-bar">
+    <div class="cb-left">
+      <button class="mini" id="plusBtn" title="插入一个示例问题">＋</button>
+      <button class="mini" id="settingsBtn" title="查看执行模式说明">⌄</button>
+      <span class="cb-hint" id="offlineTip">离线快照模式：示例问题可查看预录结果</span>
+    </div>
+    <div class="cb-right">
+      <select id="mode" title="执行模式">
+        <option value="auto">auto · 自动</option>
+        <option value="single">single · 单轮</option>
+        <option value="agent">agent · 多步</option>
+      </select>
+      <button class="send" id="askBtn" title="发送">
+        <svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-6-7-2z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="mask" id="mask"></div>
+<div class="drawer" id="drawer">
+  <div class="dr-head"><h2>工作台 · 实验与版本</h2><button class="dr-close" id="closeDrawer">×</button></div>
+
+  <section id="dataSection">
+    <h3>数据源与运行状态</h3>
+    <div class="muted" id="dataInfo">读取中…</div>
+  </section>
+
+  <section>
+    <h3>当前评估数字</h3>
+    <div class="kpi">
+      <div><strong id="kSmoke">15/15</strong><span>冒烟集（链路）</span></div>
+      <div><strong id="kFull">64.6%</strong><span>真实模型 3 轮均值 ±0.7%</span></div>
+      <div><strong id="kSafety">8/8</strong><span>危险语句拦截</span></div>
+      <div><strong id="kTests">16/16</strong><span>单元测试</span></div>
+    </div>
+    <div class="notice"><code>LLM_MODE=real</code> 连跑 3 轮：63.9% / 64.6% / 65.3%，均值 <strong>64.6% ± 0.7%</strong>（论文应引用这个）。同口径 mock 基线 23.6%，安全拦截 8/8，消融显示 Schema 检索贡献最大（−7.64pp）。</div>
+    <button class="dbtn" id="evalBtn">现跑冒烟评估</button>
+    <button class="dbtn" id="ablBtn">现跑五组消融</button>
+    <pre id="evalOut" class="hidden"></pre>
+  </section>
+
+  <section>
+    <h3>消融实验（真实模型）</h3>
+    <div class="tbl-wrap"><table>
+      <tr><th>配置</th><th>准确率</th><th>Δ</th><th>上下文</th></tr>
+      <tr><td>full</td><td>64.6%</td><td>—</td><td>445</td></tr>
+      <tr><td>no_fk_expansion</td><td>61.8%</td><td>−2.77pp</td><td>330</td></tr>
+      <tr><td>no_retrieval</td><td>56.9%</td><td>−7.64pp</td><td>809</td></tr>
+      <tr><td>no_self_correction</td><td>62.5%</td><td>−2.08pp</td><td>445</td></tr>
+      <tr><td>minimal</td><td>57.6%</td><td>−6.94pp</td><td>809</td></tr>
+    </table></div>
+    <p class="muted">Schema 检索贡献最大。full 组 64.6% 与单独评估 65.3% 差 1 题，是 LLM 非确定性的实测证据，论文应多次运行取均值。</p>
+  </section>
+
+  <section>
+    <h3>版本演进（每步都有可用版本）</h3>
+    <div class="timeline">
+      <div class="tl"><b>v0.1 · 2026-11-07 基线</b><p>七个模块骨架、命令行、15 条冒烟集、9 个单测。</p></div>
+      <div class="tl"><b>v0.2 · 2026-11-07 第 2 增量</b><p>104 条正式评估集、五种判定口径、五组消融开关、回归门禁。</p></div>
+      <div class="tl"><b>v0.3 · 2026-11-08 可交互版本</b><p>零依赖浏览器界面、版本可视化、Git 提交与标签。</p></div>
+      <div class="tl"><b>v0.3.1 · 2026-11-08 离线也能点</b><p>内嵌 5 个快捷问题的真实结果快照。</p></div>
+      <div class="tl"><b>v0.3.2 · 2026-11-08 动态 diff</b><p>代码变化区自动取最近两个 tag 对比。</p></div>
+      <div class="tl"><b>v0.3.3 · 2026-11-09 项目标识统一</b><p>本地目录与云端仓库统一为 agentic-data-analyst。</p></div>
+      <div class="tl"><b>v0.4 · 2026-11-09 UCI 真实数据接入</b><p>20560 条真实记录，两种数据源可切换。</p></div>
+      <div class="tl"><b>v0.4.1 · 2026-11-09 评估口径独立</b><p>标准 SQL 独立人工标注，评估集扩到 144 条。</p></div>
+      <div class="tl"><b>v0.5 · 2026-11-09 真实模型零依赖接入</b><p>标准库实现 OpenAI 兼容协议，密钥本地防护。</p></div>
+      <div class="tl"><b>v0.6 · 2026-11-09 真实模型实测</b><p>单轮 65.3%，逐层消融产出非零 delta。</p></div>
+      <div class="tl"><b>v0.7 · 2026-11-09 补做 B 类</b><p>3 轮重复实验 64.6% ± 0.7%、指标差距分析、语义检索对照。</p></div>
+      <div class="tl"><b>v0.8 · 2026-11-09 可选联网实时采集</b><p>Open-Meteo 写入独立 live.db，评估库保持冻结。</p></div>
+      <div class="tl"><b>v0.9 · 2026-11-09 界面改版</b><p>对齐 Chat2DB 深色客户端：会话列表、对话式结果、工作台抽屉。</p></div>
+    </div>
+    <div class="notice">以后每完成一步：保证可运行 → 更新 CHANGELOG → <code>git commit</code> + 打 tag → 下方刷新即可看到新增文件与改动行数。</div>
+  </section>
+
+  <section>
+    <h3>代码变化（来自 git）</h3>
+    <pre id="changes">读取中…</pre>
+  </section>
+
+  <section>
+    <h3>命令速查</h3>
+    <pre>python scripts/serve.py
+python -m src.cli "3号教室昨天的平均温度是多少"
+python scripts/run_eval.py
+git diff v0.8 v0.9 --stat</pre>
+    <p class="muted">只监听 127.0.0.1。当前默认 mock 完全离线；要现场演示真实模型需以 <code>LLM_MODE=real</code> 重启服务。</p>
+  </section>
+</div>
 
 <script>
-const SNAPSHOTS = {"3号教室昨天的平均温度是多少":{"question":"3号教室昨天的平均温度是多少","mode":"single","conclusion":"已返回 1 行结果，共 1 个字段。","columns":["avg_temperature"],"rows":[[22.58]],"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.2, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.1,"sql":""},{"step":2,"action":"text2sql","params":{"question":"3号教室昨天的平均温度是多少"},"result_summary":"source=mock attempts=1 rows=1 error=none","elapsed_ms":167.21,"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":187.1474999934435,"estimated_cost_yuan":0.0008,"fallback_used":false},"这周哪个教室空气质量最差，为什么":{"question":"这周哪个教室空气质量最差，为什么","mode":"agent","conclusion":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.07,"sql":""},{"step":2,"action":"text2sql","params":{"question":"这周哪个教室空气质量最差，为什么"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":2.16,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"},{"step":3,"action":"execute_sql","params":{"target":"3号教室"},"result_summary":"告警记录 2 条；error=none","elapsed_ms":0.58,"sql":"SELECT a.ts, a.type, a.level FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = ? ORDER BY a.ts DESC LIMIT 10;"},{"step":4,"action":"explain","params":{"rows":5},"result_summary":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","elapsed_ms":0.0,"sql":""}],"steps":4,"denied":false,"error":"","elapsed_ms":3.5632000071927905,"estimated_cost_yuan":0.001386,"fallback_used":false},"报警次数最多的设备属于哪个楼层":{"question":"报警次数最多的设备属于哪个楼层","mode":"single","conclusion":"已返回 5 行结果，共 3 个字段。","columns":["floor","site_name","alarm_count"],"rows":[[1,"3号教室",2],[1,"1号教室",1],[2,"2号教室",1],[2,"4号教室",1],[3,"5号教室",1]],"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['alarm', 'device', 'site']；外键扩展 []；打分 {'alarm': 4.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.06,"sql":""},{"step":2,"action":"text2sql","params":{"question":"报警次数最多的设备属于哪个楼层"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":1.49,"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5"}],"steps":2,"denied":false,"error":"","elapsed_ms":2.1791000617668033,"estimated_cost_yuan":0.00073,"fallback_used":false},"删除所有设备记录":{"question":"删除所有设备记录","mode":"single","conclusion":"已拦截危险语句，未执行。","columns":[],"rows":[],"sql":"DELETE FROM device;","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['device', 'site']；外键扩展 ['site']；打分 {'alarm': 0.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 0.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.06,"sql":""},{"step":2,"action":"text2sql","params":{"question":"删除所有设备记录"},"result_summary":"source=mock attempts=1 rows=0 error=只允许 SELECT 查询，写操作已拦截","elapsed_ms":0.02,"sql":"DELETE FROM device;"}],"steps":2,"denied":true,"error":"只允许 SELECT 查询，写操作已拦截","elapsed_ms":0.7757999701425433,"estimated_cost_yuan":0.000408,"fallback_used":false},"各教室本月的 CO2 均值排名":{"question":"各教室本月的 CO2 均值排名","mode":"single","conclusion":"已返回 5 行结果，共 2 个字段。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'v_site_air_quality', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 5.0, 'site': 2.0, 'v_site_air_quality': 0.2}","elapsed_ms":0.06,"sql":""},{"step":2,"action":"text2sql","params":{"question":"各教室本月的 CO2 均值排名"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":4.38,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":5.157300038263202,"estimated_cost_yuan":0.00081,"fallback_used":false}};
+/* 离线快照：由 scripts/build_snapshots.py 注入，静态打开页面也能点示例问题 */
+const SNAPSHOTS = {"3号教室昨天的平均温度是多少":{"question":"3号教室昨天的平均温度是多少","mode":"single","conclusion":"已返回 1 行结果，共 1 个字段。","columns":["avg_temperature"],"rows":[[22.58]],"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.2, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.09,"sql":""},{"step":2,"action":"text2sql","params":{"question":"3号教室昨天的平均温度是多少"},"result_summary":"source=mock attempts=1 rows=1 error=none","elapsed_ms":198.91,"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":222.28600003290921,"estimated_cost_yuan":0.0008,"fallback_used":false},"这周哪个教室空气质量最差，为什么":{"question":"这周哪个教室空气质量最差，为什么","mode":"agent","conclusion":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.07,"sql":""},{"step":2,"action":"text2sql","params":{"question":"这周哪个教室空气质量最差，为什么"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":2.76,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"},{"step":3,"action":"execute_sql","params":{"target":"3号教室"},"result_summary":"告警记录 2 条；error=none","elapsed_ms":1.56,"sql":"SELECT a.ts, a.type, a.level FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = ? ORDER BY a.ts DESC LIMIT 10;"},{"step":4,"action":"explain","params":{"rows":5},"result_summary":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","elapsed_ms":0.0,"sql":""}],"steps":4,"denied":false,"error":"","elapsed_ms":6.326199974864721,"estimated_cost_yuan":0.001386,"fallback_used":false},"报警次数最多的设备属于哪个楼层":{"question":"报警次数最多的设备属于哪个楼层","mode":"single","conclusion":"已返回 5 行结果，共 3 个字段。","columns":["floor","site_name","alarm_count"],"rows":[[1,"3号教室",2],[1,"1号教室",1],[2,"2号教室",1],[2,"4号教室",1],[3,"5号教室",1]],"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['alarm', 'device', 'site']；外键扩展 []；打分 {'alarm': 4.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.06,"sql":""},{"step":2,"action":"text2sql","params":{"question":"报警次数最多的设备属于哪个楼层"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":2.43,"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5"}],"steps":2,"denied":false,"error":"","elapsed_ms":4.261099966242909,"estimated_cost_yuan":0.00073,"fallback_used":false},"删除所有设备记录":{"question":"删除所有设备记录","mode":"single","conclusion":"已拦截危险语句，未执行。","columns":[],"rows":[],"sql":"DELETE FROM device;","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['device', 'site']；外键扩展 ['site']；打分 {'alarm': 0.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 0.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.06,"sql":""},{"step":2,"action":"text2sql","params":{"question":"删除所有设备记录"},"result_summary":"source=mock attempts=1 rows=0 error=只允许 SELECT 查询，写操作已拦截","elapsed_ms":0.03,"sql":"DELETE FROM device;"}],"steps":2,"denied":true,"error":"只允许 SELECT 查询，写操作已拦截","elapsed_ms":1.774700009264052,"estimated_cost_yuan":0.000408,"fallback_used":false},"各教室本月的 CO2 均值排名":{"question":"各教室本月的 CO2 均值排名","mode":"single","conclusion":"已返回 5 行结果，共 2 个字段。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'v_site_air_quality', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 5.0, 'site': 2.0, 'v_site_air_quality': 0.2}","elapsed_ms":0.07,"sql":""},{"step":2,"action":"text2sql","params":{"question":"各教室本月的 CO2 均值排名"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":5.33,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":7.404299918562174,"estimated_cost_yuan":0.00081,"fallback_used":false}};
 const $ = id => document.getElementById(id);
-let online = false;
+const QUICK = [
+  "3号教室昨天的平均温度是多少",
+  "这周哪个教室空气质量最差，为什么",
+  "报警次数最多的设备属于哪个楼层",
+  "删除所有设备记录",
+  "各教室本月的 CO2 均值排名",
+];
+const STORE_KEY = "ada.sessions.v1";
+let online = false, status = null, sessions = [], currentId = null, messages = [];
 
+/* ── 网络与状态 ─────────────────────────────────────────────── */
 async function api(path) {
   try {
     const r = await fetch(path, {cache: "no-store"});
@@ -147,84 +401,209 @@ async function api(path) {
     return await r.json();
   } catch (e) { return null; }
 }
-
 async function loadStatus() {
   const s = await api("/api/status");
-  if (!s) { $("statusText").textContent = "静态快照（未启动服务）"; return; }
+  status = s;
+  if (!s) {
+    $("statusText").textContent = "静态快照（未启动服务）· 示例问题可离线查看";
+    $("dataInfo").textContent = "服务未启动，无法读取数据源元信息。运行 python scripts/serve.py 后刷新。";
+    return;
+  }
   online = true;
-  $("offlineTip").classList.add("hidden");
+  $("offlineTip").textContent = "实时模式 · 任意问题都会查库";
   $("verBadge").textContent = s.version;
-  $("modeBadge").textContent = s.llm_mode + " 模式";
+  $("modeBadge").textContent = s.llm_mode;
+  $("modeBadge").className = "chip" + (s.llm_mode === "real" ? " on" : "");
+  $("srcBadge").textContent = s.data_source || "synthetic";
   $("statusText").textContent =
     `数据库 ${s.db_exists ? "已就绪" : "未建"} · ${s.sensor_rows} 行监测数据 · ` +
-    `数据源 ${s.data_source || "synthetic"} · ` +
-    `冒烟集 ${s.cases_smoke} 条 / 正式集 ${s.cases_full} 条 · ${s.reports.length} 份报告`;
-  // 悬停显示数据集全称与预处理说明，避免两种口径的评估数字被混着看
+    `冒烟 ${s.cases_smoke} / 正式 ${s.cases_full} 条 · ${s.reports.length} 份报告`;
   $("statusText").title = (s.dataset || "") + (s.data_note ? " · " + s.data_note : "");
+  $("dataInfo").innerHTML =
+    `<div>版本 <b>${esc(s.version)}</b> · 模型 <b>${esc(s.llm_mode)}</b> · 数据源 <b>${esc(s.data_source || "synthetic")}</b></div>` +
+    `<div style="margin-top:5px">监测数据 <b>${s.sensor_rows}</b> 行 · 冒烟集 <b>${s.cases_smoke}</b> 条 · 正式集 <b>${s.cases_full}</b> 条 · 报告 <b>${s.reports.length}</b> 份</div>` +
+    `<div style="margin-top:6px;color:var(--faint)">${esc(s.dataset || "")}${s.data_note ? " · " + esc(s.data_note) : ""}</div>`;
 }
-
 async function loadChanges() {
   const c = await api("/api/changes");
   $("changes").textContent = c
     ? ["标签：\n" + c.tags, "提交历史：\n" + c.log,
        (c.diff_label || "版本变更") + "：\n" + c.diff_prev,
        "工作区状态：\n" + (c.status || "(干净)")].join("\n\n")
-    : "（启动 python scripts/serve.py 后这里会显示 git 提交、标签与 diff --stat）";
+    : "（启动 python scripts/serve.py 后这里显示 git 提交、标签与 diff --stat）";
 }
-
 function esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"']/g,
     m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
 }
 
-function render(res) {
-  let html = "";
-  if (res.error) { $("result").innerHTML = `<p class="danger">${esc(res.error)}</p>`; return; }
-  html += `<p class="muted">模式 ${esc(res.mode)} · 步数 ${res.steps} · 耗时 ${res.elapsed_ms.toFixed(1)} ms · 估算成本 ${res.estimated_cost_yuan} 元</p>`;
-  html += `<div class="conclusion">${esc(res.conclusion)}</div>`;
-  html += `<h3>生成的 SQL（可核对）</h3><pre>${esc(res.sql || "(无)")}</pre>`;
-  if (res.denied) html += `<p class="danger">安全拦截：${esc(res.error)}</p>`;
-  else if (res.error) html += `<p class="warn">执行失败：${esc(res.error)}</p>`;
+/* ── 会话历史：localStorage，纯前端，不进服务端也不进仓库 ───────── */
+function loadSessions() {
+  try { sessions = JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); }
+  catch (e) { sessions = []; }
+  if (!Array.isArray(sessions)) sessions = [];
+}
+function saveSessions() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions.slice(0, 30))); } catch (e) {}
+}
+function now() {
+  return new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"});
+}
+function renderSessions(filter) {
+  const box = $("sessions");
+  const f = (filter || "").trim();
+  const list = sessions.filter(s => !f || (s.title || "").includes(f));
+  $("sessCount").textContent = sessions.length;
+  box.innerHTML = list.length ? list.map(s =>
+    `<div class="sess ${s.id === currentId ? "active" : ""}" data-id="${esc(s.id)}">
+       <span class="t">${esc(s.title)}</span><span class="tm">${esc(s.time)}</span>
+       <button class="del" data-del="${esc(s.id)}" title="删除">×</button></div>`).join("")
+    : `<div class="muted" style="padding:8px 10px">${f ? "没有匹配的对话" : "还没有对话，点上方新建"}</div>`;
+  box.querySelectorAll(".sess").forEach(el => el.onclick = e => {
+    if (e.target.dataset.del) {
+      const id = e.target.dataset.del;
+      sessions = sessions.filter(s => s.id !== id);
+      if (currentId === id) newSession(); else { saveSessions(); renderSessions(); }
+      return;
+    }
+    switchSession(el.dataset.id);
+  });
+}
+function newSession() {
+  // 当前已经是空会话时直接复用，避免反复点「新建对话」堆出一排空条目
+  const cur = sessions.find(x => x.id === currentId);
+  if (cur && !(cur.messages || []).length) {
+    messages = []; renderThread(); return;
+  }
+  currentId = "s" + Date.now();
+  messages = [];
+  sessions.unshift({id: currentId, title: "新对话", time: now(), messages: []});
+  saveSessions(); renderSessions(); renderThread();
+}
+function switchSession(id) {
+  const s = sessions.find(x => x.id === id);
+  if (!s) return;
+  currentId = id; messages = s.messages || [];
+  renderSessions(); renderThread();
+  closeDrawer();
+}
+function commitSession() {
+  const s = sessions.find(x => x.id === currentId);
+  if (!s) return;
+  s.messages = messages;
+  s.time = now();
+  saveSessions(); renderSessions();
+}
+
+/* ── 结果卡片：把一次查询渲染成一条 AI 消息 ───────────────────── */
+function resultHtml(res, offline) {
+  if (!res) return `<div class="err">服务未响应。</div>`;
+  if (res.error && !res.sql && !res.rows) return `<div class="err">${esc(res.error)}</div>`;
+  let h = "";
+  if (offline) h += `<div class="pill">离线快照 · 预录的真实运行结果</div>`;
+  h += `<div class="meta">模式 ${esc(res.mode || "-")} · 步数 ${res.steps ?? "-"} · ` +
+       `耗时 ${Number(res.elapsed_ms || 0).toFixed(1)} ms · ` +
+       `估算成本 ${res.estimated_cost_yuan ?? "-"} 元` +
+       (res.fallback_used ? " · 已触发兜底" : "") + "</div>";
+  h += `<div class="answer">`;
+  if (res.denied) h += `<span class="badge-inline danger">安全拦截</span>`;
+  h += esc(res.conclusion || "(无结论)") + `</div>`;
+  if (res.sql) h += `<details open><summary>生成的 SQL（可核对）</summary><pre>${esc(res.sql)}</pre></details>`;
+  if (res.denied && res.error) h += `<p class="err" style="margin-top:8px">${esc(res.error)}</p>`;
+  else if (res.error) h += `<p class="err" style="margin-top:8px">执行失败：${esc(res.error)}</p>`;
   if (res.rows && res.rows.length) {
-    html += "<h3>结果表格</h3><table><tr>" + res.columns.map(c => `<th>${esc(c)}</th>`).join("") + "</tr>";
-    html += res.rows.slice(0, 12).map(r => "<tr>" + r.map(v => `<td>${esc(v)}</td>`).join("") + "</tr>").join("");
-    html += "</table>";
-    if (res.rows.length > 12) html += `<p class="muted">仅显示前 12 行，共 ${res.rows.length} 行</p>`;
+    h += `<details open><summary>结果表格 · ${res.rows.length} 行</summary><div class="tbl-wrap"><table><tr>` +
+         (res.columns || []).map(c => `<th>${esc(c)}</th>`).join("") + "</tr>" +
+         res.rows.slice(0, 12).map(r => "<tr>" + r.map(v => `<td>${esc(v)}</td>`).join("") + "</tr>").join("") +
+         "</table></div>" +
+         (res.rows.length > 12 ? `<p class="muted">仅显示前 12 行，共 ${res.rows.length} 行</p>` : "") +
+         `</details>`;
   }
   if (res.trace && res.trace.length) {
-    html += "<h3>执行轨迹</h3><table><tr><th>步</th><th>动作</th><th>摘要</th></tr>";
-    html += res.trace.map(t => `<tr><td>${t.step}</td><td>${esc(t.action)}</td><td>${esc(t.result_summary)}</td></tr>`).join("");
-    html += "</table>";
+    h += `<details><summary>执行轨迹 · ${res.trace.length} 步</summary><div class="tbl-wrap"><table>` +
+         `<tr><th>步</th><th>动作</th><th>摘要</th></tr>` +
+         res.trace.map(t => `<tr><td>${t.step}</td><td>${esc(t.action)}</td><td>${esc(t.result_summary)}</td></tr>`).join("") +
+         `</table></div></details>`;
   }
-  $("result").innerHTML = html;
+  return h;
+}
+function renderThread() {
+  const has = messages.length > 0;
+  $("hero").classList.toggle("hidden", has);
+  $("thread").classList.toggle("hidden", !has);
+  // 同一个 composer 节点在两个容器间移动，监听器仍绑定在节点上
+  (has ? $("dockSlot") : $("heroSlot")).appendChild($("composer"));
+  $("threadInner").innerHTML = messages.map(m =>
+    `<div class="msg you"><div class="av">W</div><div class="bubble">${esc(m.q)}</div></div>` +
+    `<div class="msg ai"><div class="av">✦</div><div class="bubble">${resultHtml(m.res, m.offline)}</div></div>`
+  ).join("");
+  const t = $("thread"); t.scrollTop = t.scrollHeight;
 }
 
-async function ask() {
-  const q = $("q").value.trim();
-  if (!q) return;
-  $("result").innerHTML = '<p class="muted">分析中…</p>';
+/* ── 提问：在线优先，离线回退到内嵌快照 ───────────────────────── */
+let busy = false;
+async function ask(qText) {
+  const q = (qText !== undefined ? qText : $("q").value).trim();
+  if (!q || busy) return;
+  busy = true; $("askBtn").disabled = true;
+  if (!currentId) newSession();
+  const cur = sessions.find(x => x.id === currentId);
+  if (cur && !messages.length) cur.title = q.length > 16 ? q.slice(0, 16) + "…" : q;
+  messages.push({q, res: {mode: "…", conclusion: "分析中…", steps: 0, elapsed_ms: 0, estimated_cost_yuan: "-"}});
+  renderThread();
+
   const mode = $("mode").value;
-  const res = await api("/api/ask?q=" + encodeURIComponent(q) + "&mode=" + mode);
-  if (res) { render(res); return; }
-  const snap = SNAPSHOTS[q];
-  if (snap) {
-    render(snap);
-    $("result").insertAdjacentHTML("afterbegin",
-      '<p class="notice">离线快照（预录的真实运行结果）；实时提问请启动 <code>python scripts/serve.py</code></p>');
-  } else {
-    render({error: "服务未启动，且该问题没有离线快照。请运行 python scripts/serve.py"});
+  let res = await api("/api/ask?q=" + encodeURIComponent(q) + "&mode=" + mode);
+  let offline = false;
+  if (!res) {
+    const snap = SNAPSHOTS[q];
+    if (snap) { res = snap; offline = true; }
+    else res = {error: "服务未启动，且该问题没有离线快照。请运行 python scripts/serve.py 后重试。"};
   }
+  messages[messages.length - 1] = {q, res, offline};
+  $("q").value = "";
+  renderThread(); commitSession();
+  busy = false; $("askBtn").disabled = false;
 }
 
-document.querySelectorAll("button[data-q]").forEach(b => {
-  b.onclick = () => {
-    $("q").value = b.dataset.q;
-    $("mode").value = b.dataset.q.includes("为什么") ? "agent" : "auto";
-    ask();
-  };
+/* ── 交互绑定 ───────────────────────────────────────────────── */
+$("quick").innerHTML = QUICK.map(q => `<button data-q="${esc(q)}">${esc(q)}</button>`).join("");
+document.querySelectorAll("button[data-q]").forEach(b => b.onclick = () => {
+  if (b.dataset.q.includes("为什么")) $("mode").value = "agent";
+  else $("mode").value = "auto";
+  ask(b.dataset.q);
+  closeDrawer();
 });
-$("askBtn").onclick = ask;
-$("q").addEventListener("keydown", e => { if (e.key === "Enter") ask(); });
+$("plusBtn").onclick = () => { $("q").value = QUICK[Math.floor(Math.random() * QUICK.length)]; $("q").focus(); };
+$("settingsBtn").onclick = () => openDrawer();
+$("askBtn").onclick = () => ask();
+$("q").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); }
+});
+$("newChat").onclick = () => { newSession(); $("q").focus(); closeDrawer(); };
+$("searchBtn").onclick = () => $("search").classList.toggle("hidden");
+$("search").addEventListener("input", e => renderSessions(e.target.value));
+$("railToggle").onclick = () => $("sidebar").classList.toggle("collapsed");
+$("railHelp").onclick = () => { openDrawer(); $("drawer").scrollTop = $("drawer").scrollHeight; };
+
+function openDrawer() { $("drawer").classList.add("open"); $("mask").classList.add("show"); }
+function closeDrawer() { $("drawer").classList.remove("open"); $("mask").classList.remove("show"); }
+$("openWorkbench").onclick = openDrawer;
+$("closeDrawer").onclick = closeDrawer;
+$("mask").onclick = closeDrawer;
+document.querySelectorAll(".rail-ic[data-panel]").forEach(b => b.onclick = () => {
+  document.querySelectorAll(".rail-ic[data-panel]").forEach(x => x.classList.remove("active"));
+  b.classList.add("active");
+  if (b.dataset.panel === "workbench" || b.dataset.panel === "data") {
+    openDrawer();
+    const target = b.dataset.panel === "data" ? $("dataSection") : null;
+    if (target) $("drawer").scrollTop = target.offsetTop - 20;
+  } else closeDrawer();
+});
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("q").focus(); }
+  if (e.key === "Escape") closeDrawer();
+});
 
 $("evalBtn").onclick = async () => {
   const out = $("evalOut"); out.classList.remove("hidden"); out.textContent = "正在跑 15 条冒烟集…";
@@ -232,7 +611,7 @@ $("evalBtn").onclick = async () => {
   out.textContent = s ? JSON.stringify(s, null, 2) : "服务未启动";
 };
 $("ablBtn").onclick = async () => {
-  const out = $("evalOut"); out.classList.remove("hidden"); out.textContent = "正在跑五组消融（104 题 × 5）…";
+  const out = $("evalOut"); out.classList.remove("hidden"); out.textContent = "正在跑五组消融…";
   const a = await api("/api/ablation");
   out.textContent = a
     ? Object.entries(a.configs).map(([k, v]) =>
@@ -241,12 +620,14 @@ $("ablBtn").onclick = async () => {
     : "服务未启动";
 };
 
+/* 启动：会话列表 → 布局 → 状态与代码变化 */
+loadSessions();
+newSession();
 loadChanges();
-// 等状态请求返回后再决定要不要用 URL 参数自动提问，避免 online 还是 false
 loadStatus().then(() => {
-  if (location.search.includes("q=")) {
+  if (location.search.includes("q=") && online) {
     $("q").value = new URLSearchParams(location.search).get("q");
-    if (online) ask();
+    ask();
   }
 });
 </script>
