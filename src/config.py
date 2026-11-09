@@ -78,6 +78,15 @@ class Settings:
     # 结果行数上限，validator 会对没有 LIMIT 的语句自动补上。
     row_limit: int = int(os.getenv("ROW_LIMIT", "1000"))
 
+    # ---- 可选语义检索（v0.7）-------------------------------------------
+    # 默认关闭：v0.6 的 65.3%、五组消融与重复实验都是在「关键词 + 数据字典」
+    # 口径下测的，保持默认不变才能让已有数字可比。开启方式：
+    #   ENABLE_SEMANTIC_RETRIEVAL=1 或 scripts/compare_semantic.py 显式切换。
+    # 打开后 hybrid_score() 会叠加 semantic.py 的零依赖语义相似度；
+    # 该实现是字符 n-gram + TF-IDF，不是 Chroma 的神经网络 embedding，
+    # 但接口一致，将来装得上向量库可直接替换 provider。
+    enable_semantic_retrieval: bool = os.getenv("ENABLE_SEMANTIC_RETRIEVAL", "0") == "1"
+
     # ---- 消融实验开关 ---------------------------------------------------
     # 三个开关默认全开（即完整方案）。ablation.py 会在每组实验前临时改写
     # settings 实例，跑完恢复，保证「逐层独立开关」这一论文要求可落地。

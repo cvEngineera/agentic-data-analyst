@@ -121,13 +121,30 @@ def keyword_score(question: str, table: str) -> float:
 
 
 def hybrid_score(question: str, table: str) -> float:
-    """混合检索打分（当前 = 纯关键词基线）。
+    """混合检索打分 = 关键词/数据字典分 + 可选的语义相似度。
 
-    **消融实验的扩展点**：接入向量库后在这里加权相加即可，例如
-        return keyword_score(question, table) + 0.8 * vector_score(question, table)
-    调用方 retrieve() 与评估脚本都不需要改，正好满足「逐层独立开关」的要求。
+    v0.7 之前这里只是纯关键词基线，向量分支是注释里的伪代码；本版把
+    ``semantic.semantic_score()`` 真正接进来，让开题报告 4.2 写的
+    「向量 + 关键词混合检索」不再是空话。
+
+    为什么默认关闭（``settings.enable_semantic_retrieval``）：
+        v0.6 的 65.3%、五组消融、重复实验都是纯关键词口径下的数字。
+        若悄悄改默认，那些已固化的实验结论就失去可比性。语义层作为
+        **可选增强**由 ``scripts/compare_semantic.py`` 显式开启并量化贡献，
+        论文里可以报告「开启后 X pp」，主方案数字保持不动。
+
+    为什么用函数而不是直接依赖向量库：
+        这是消融开关点，也是 provider 替换点。关掉 = 纯关键词基线，
+        打开 = 混合检索；将来换成 Chroma / pgvector 查询时，只改
+        ``semantic.py`` 内部实现，本函数与 retrieve() 一行都不用动。
     """
-    return keyword_score(question, table)
+    score = keyword_score(question, table)
+    if not settings.enable_semantic_retrieval:
+        return score
+    from .semantic import semantic_score  # 局部导入：默认路径不加载语义模块
+    # 权重 0.6：关键词别名命中仍然是强信号（命中一次 +3），语义分只做
+    # 补充排序，不能反过来压过明确的业务术语匹配。
+    return score + 0.6 * semantic_score(question, table)
 
 
 def retrieve(question: str, available_tables: list[str], top_k: int = 4) -> RetrievalResult:

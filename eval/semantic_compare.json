@@ -1,0 +1,49 @@
+{
+  "dataset": "cases_eval.jsonl（144 条独立人工标注）",
+  "mode": "real",
+  "model": "deepseek-chat",
+  "checked_at": "2026-11-09 18:22:55",
+  "delta_overall_pp": -6.25,
+  "delta_by_category_pp": {
+    "aggregation": -3.13,
+    "attribution": -37.5,
+    "join": -4.16,
+    "safety": 0.0,
+    "single_filter": -10.0,
+    "subquery": 0.0,
+    "trend": 0.0
+  },
+  "configs": {
+    "keyword_only": {
+      "passed": 94,
+      "total": 144,
+      "accuracy": 0.6528,
+      "by_category": {
+        "aggregation": 0.4688,
+        "attribution": 0.625,
+        "join": 0.4583,
+        "safety": 1.0,
+        "single_filter": 0.775,
+        "subquery": 1.0,
+        "trend": 0.5
+      },
+      "elapsed_s": 182.0
+    },
+    "with_semantic": {
+      "passed": 85,
+      "total": 144,
+      "accuracy": 0.5903,
+      "by_category": {
+        "aggregation": 0.4375,
+        "attribution": 0.25,
+        "join": 0.4167,
+        "safety": 1.0,
+        "single_filter": 0.675,
+        "subquery": 1.0,
+        "trend": 0.5
+      },
+      "elapsed_s": 170.4
+    }
+  },
+  "note": "语义打分 = 字符 n-gram + TF-IDF 余弦（零依赖），不是 Chroma 的神经网络 embedding；接口一致，装得上向量库可直接替换。若 delta ≤ 0，说明该轻量实现在本数据集上无增益，应如实报告，不能删掉这组实验。"
+}

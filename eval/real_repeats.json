@@ -1,0 +1,119 @@
+{
+  "dataset": "cases_eval.jsonl（144 条独立人工标注）",
+  "mode": "real",
+  "model": "deepseek-chat",
+  "checked_at": "2026-11-09 18:16:47",
+  "runs": 3,
+  "overall": {
+    "mean": 0.6458,
+    "std": 0.007,
+    "min": 0.6389,
+    "max": 0.6528,
+    "range_pp": 1.39
+  },
+  "by_category": {
+    "aggregation": {
+      "mean": 0.4584,
+      "std": 0.0181,
+      "min": 0.4375,
+      "max": 0.4688,
+      "range_pp": 3.13
+    },
+    "attribution": {
+      "mean": 0.625,
+      "std": 0.0,
+      "min": 0.625,
+      "max": 0.625,
+      "range_pp": 0.0
+    },
+    "join": {
+      "mean": 0.4583,
+      "std": 0.0,
+      "min": 0.4583,
+      "max": 0.4583,
+      "range_pp": 0.0
+    },
+    "safety": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0,
+      "range_pp": 0.0
+    },
+    "single_filter": {
+      "mean": 0.7583,
+      "std": 0.0144,
+      "min": 0.75,
+      "max": 0.775,
+      "range_pp": 2.5
+    },
+    "subquery": {
+      "mean": 1.0,
+      "std": 0.0,
+      "min": 1.0,
+      "max": 1.0,
+      "range_pp": 0.0
+    },
+    "trend": {
+      "mean": 0.5,
+      "std": 0.0,
+      "min": 0.5,
+      "max": 0.5,
+      "range_pp": 0.0
+    }
+  },
+  "rounds": [
+    {
+      "round": 1,
+      "passed": 92,
+      "total": 144,
+      "accuracy": 0.6389,
+      "elapsed_s": 174.4,
+      "avg_steps": 2.02,
+      "by_category": {
+        "aggregation": 0.4375,
+        "attribution": 0.625,
+        "join": 0.4583,
+        "safety": 1.0,
+        "single_filter": 0.75,
+        "subquery": 1.0,
+        "trend": 0.5
+      }
+    },
+    {
+      "round": 2,
+      "passed": 93,
+      "total": 144,
+      "accuracy": 0.6458,
+      "elapsed_s": 168.9,
+      "avg_steps": 2.03,
+      "by_category": {
+        "aggregation": 0.4688,
+        "attribution": 0.625,
+        "join": 0.4583,
+        "safety": 1.0,
+        "single_filter": 0.75,
+        "subquery": 1.0,
+        "trend": 0.5
+      }
+    },
+    {
+      "round": 3,
+      "passed": 94,
+      "total": 144,
+      "accuracy": 0.6528,
+      "elapsed_s": 178.3,
+      "avg_steps": 2.02,
+      "by_category": {
+        "aggregation": 0.4688,
+        "attribution": 0.625,
+        "join": 0.4583,
+        "safety": 1.0,
+        "single_filter": 0.775,
+        "subquery": 1.0,
+        "trend": 0.5
+      }
+    }
+  ],
+  "note": "样本标准差；温度置 0 仍存在抖动。论文应报告均值 ± 标准差，不要只引用单轮结果。v0.6 的单独评估 65.3% 与消融 full 组 64.6% 可作为历史参照，但不纳入本报告的统计量。"
+}

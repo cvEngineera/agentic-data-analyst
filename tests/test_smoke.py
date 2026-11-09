@@ -136,5 +136,38 @@ class TestUciAdapter(unittest.TestCase):
         self.assertTrue(all(r[5] == 600.0 for r in recent_other))  # 其他教室不受影响
 
 
+class TestSemanticRetrieval(unittest.TestCase):
+    """轻量语义打分的纯函数测试（v0.7）。
+
+    不联网、不依赖 chromadb / numpy：故意只测「范围、确定性、开关生效」，
+    不预设某张表一定排第一——字符 n-gram 相似度的排序能力由对照实验
+    （scripts/compare_semantic.py）在真实模型上量化，单测不做主观断言。
+    """
+
+    def test_score_range_and_determinism(self) -> None:
+        from src.schema_retrieval.catalog import TABLE_META
+        from src.schema_retrieval.semantic import semantic_score
+        q = "3号教室昨天的平均温度是多少"
+        for table in TABLE_META:
+            s = semantic_score(q, table)
+            self.assertGreaterEqual(s, 0.0)
+            self.assertLessEqual(s, 1.0)
+            self.assertEqual(s, semantic_score(q, table))  # 缓存不改变结果
+
+    def test_hybrid_score_toggle(self) -> None:
+        from src.config import settings
+        from src.schema_retrieval.catalog import hybrid_score
+        q = "二氧化碳浓度偏高的时段"
+        original = settings.enable_semantic_retrieval
+        try:
+            settings.enable_semantic_retrieval = False
+            off = hybrid_score(q, "sensor_data")
+            settings.enable_semantic_retrieval = True
+            on = hybrid_score(q, "sensor_data")
+            self.assertGreaterEqual(on, off)  # 语义分非负，开启不会拉低
+        finally:
+            settings.enable_semantic_retrieval = original
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
