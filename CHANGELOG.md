@@ -24,7 +24,7 @@ LangChain 换成了手写 urllib、pgvector 换成了自研 TF-IDF、Vue3+EChart
 
 | 申报表技术 | 落地位置 | 说明 |
 |---|---|---|
-| FastAPI | `scripts/api.py` | 8 个接口 + `/docs` 自动文档；`serve.py` 保留为兜底 |
+| FastAPI | `scripts/api.py` | 7 个接口 + `/docs` 自动文档；`serve.py` 保留为兜底 |
 | SQLAlchemy | `src/db/orm.py` | 四个声明式模型、引擎工厂、Inspector 反射 |
 | MySQL | `src/db/schema_mysql.sql` + `scripts/setup_mysql.py` | 建库/建表/导数/行数与聚合双重校验 |
 | LangChain | `src/llm/langchain_client.py` | `prompt \| ChatOpenAI \| StrOutputParser`，失败回落 urllib |

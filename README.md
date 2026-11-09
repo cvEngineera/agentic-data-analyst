@@ -3,7 +3,7 @@
 一个面向物联网监测数据的 NL2SQL 分析 Agent：自然语言提问 → 自动生成 SQL → 多步归因 → 可复现的分层评估。
 覆盖室内空气质量场景（教室 / 设备 / 读数 / 告警四表），带危险语句拦截、报错自纠、执行轨迹与图表输出。
 
-**当前版本：v0.12（2026-11-09）** —— 技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + pgvector + Vue 3/ECharts 全部落地，SQLite 仍作为评估冻结库；真实模型 3 轮均值 64.6% ± 0.7%。
+**当前版本：v0.12（2026-11-09）** —— 技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + pgvector + Vue 3/ECharts 全部接入代码路径（其中 **MySQL 与 pgvector 受本机环境限制未端到端跑通**，见第九节）；SQLite 仍作为评估冻结库；真实模型 3 轮均值 64.6% ± 0.7%。
 
 > **技术栈对照（申报表 9 项 vs 代码实际）**：Python、大模型接口、UCI 数据集沿用；
 > FastAPI → `scripts/api.py`，SQLAlchemy → `src/db/orm.py`，
@@ -476,7 +476,7 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 - 没有行列级权限、多租户、实时连库、流式输出；
 - 成本是按字符粗估的，不是真实 Token 计费；
 - 归因目前是模板化的「取数 → 查告警 → 给结论」，不是自由规划；
-- LangGraph 外部基线、FastAPI、Docker 尚未落地。
+- **LangGraph 外部基线、Docker 尚未落地**；MySQL 与 pgvector 属于「代码就绪、本机未跑通」，答辩时只能演示 SQLite + 内存向量这条实际路径；
 
 ---
 
