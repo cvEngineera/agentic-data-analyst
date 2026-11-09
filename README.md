@@ -2,7 +2,15 @@
 
 毕业设计课题《基于大语言模型的物联网监测数据分析 Agent 系统设计与实现》的代码工程。
 
-**当前版本：v0.11（2026-11-09）** —— 结果页真正出图（纯 SVG 柱状/折线/饼图，零依赖）；真实模型 3 轮均值 64.6% ± 0.7%、逐层消融、指标差距分析与回归门禁齐备。
+**当前版本：v0.12（2026-11-09）** —— 技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + pgvector + Vue 3/ECharts 全部落地，SQLite 仍作为评估冻结库；真实模型 3 轮均值 64.6% ± 0.7%。
+
+> **技术栈对照（申报表 9 项 vs 代码实际）**：Python、大模型接口、UCI 数据集沿用；
+> FastAPI → `scripts/api.py`，SQLAlchemy → `src/db/orm.py`，
+> MySQL → `src/db/schema_mysql.sql` + `scripts/setup_mysql.py`，
+> LangChain → `src/llm/langchain_client.py`，
+> pgvector → `src/schema_retrieval/vector_store.py`，
+> Vue 3 + ECharts → `src/web/index.html`（依赖 vendor 在 `src/web/vendor/`）。
+> **评估集固定在 SQLite 上跑**，MySQL 只承担演示与部署，原因见 v0.12 的 CHANGELOG。
 
 > 代码已逐模块补齐详细注释：每个文件开头说明它在七模块架构中的位置与设计取舍，
 > 每个函数有参数/返回/副作用说明，关键分支（只读连接、危险语句不重试、外键一跳扩展、
@@ -25,7 +33,7 @@
 cd agentic-data-analyst
 python scripts/init_db.py --force          # 建库 + 灌入 7 天合成数据
 python -m src.cli "3号教室昨天的平均温度是多少"
-python -m unittest discover -s tests -v    # 9 个烟雾测试
+python -m unittest discover -s tests -v    # 27 个单元测试
 python scripts/run_eval.py                 # 冒烟集 15 条
 ```
 
@@ -47,6 +55,32 @@ python -m src.cli "这周哪个教室空气质量最差，为什么" --show-trac
 python -m src.cli "删除所有设备记录"                                # 安全拦截
 python -m src.cli "各教室 CO2 均值排名" --chart                      # 出图（需 matplotlib）
 ```
+
+启动网页（v0.12 起有两条通道，接口一致，任选其一）：
+
+```bash
+python scripts/api.py            # FastAPI，http://127.0.0.1:8000，/docs 是接口文档
+python scripts/serve.py          # 零依赖兜底，http://127.0.0.1:8765
+```
+
+切到 MySQL（可选，需本机已装 MySQL 8）：
+
+```bash
+set MYSQL_PASSWORD=你的root密码        # bash 用 export
+python scripts/setup_mysql.py          # 建库 + 建表 + 导数 + 行数/聚合双重校验
+# 校验通过后把 DB_BACKEND=mysql 与 MYSQL_* 写进 .env，重启服务
+```
+
+启用 pgvector（可选，需 Docker）：
+
+```bash
+docker compose up -d                   # pgvector/pgvector:pg16，映射到 5433
+python scripts/setup_pgvector.py       # 建扩展 + 建 HNSW 索引 + 写入 Schema 向量
+# 之后可用 ENABLE_VECTOR_RETRIEVAL=1 让检索叠加向量打分（默认关闭以保持评估口径）
+```
+
+> 两个「可选」都不会影响主链路：装不上/连不上时自动降级，且降级来源会
+> 写进执行轨迹，不会静默换实现。
 
 可选界面（需 `pip install streamlit`）：`streamlit run src/app.py`
 
@@ -432,8 +466,10 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 - 标准答案已独立人工标注（v0.4.1），数值比对按标准 SQL 的 `ROUND(...,2)` 精度给 0.01 容差（v0.6）；语义判定未放宽；
 - 真实模型下消融 delta 非零，最大贡献来自 Schema 检索（−7.64pp）；
 - 目标指标中单表 75%（目标 85%）、多表 JOIN 45.8%（目标 65%）、归因 62.5%（目标 70%）未达标。开题报告已声明「以实测为准、如实报告未达成项」，论文需给原因分析，不要粉饰；
-- **Chroma / pgvector 未部署**：本机装不上 `chromadb`，v0.7 改用 `semantic.py` 的零依赖语义打分（字符 n-gram + TF-IDF 余弦）接到 `hybrid_score()`，接口与向量库一致、可替换。**它不是神经网络 embedding**，效果上限低于 BGE / text-embedding；默认关闭以保持 v0.6 数字可比；实测开启后准确率 65.3% → 59.0%（**−6.25pp**），故主方案维持关闭，见 5.4 与 `eval/semantic_compare.json`；
-- **LangGraph 外部框架基线（开题报告 5.1）未实施**，原因是依赖无法安装；主工程不依赖任何框架。论文用的措辞见 5.3 节，不要写成已跑过；
+- **Chroma / pgvector（v0.12 更新）**：v0.7 时本机装不上 `chromadb`，改用 `semantic.py` 的零依赖语义打分接到 `hybrid_score()`；v0.12 已按申报表补上 pgvector 通道（`vector_store.py`，HNSW + 余弦距离），但**本机 Docker 的 WSL 后端被安全策略拦住，容器未起，实测走的是内存向量降级路径**。两者的向量都是字符 n-gram 哈希，**不是神经网络 embedding**（DeepSeek 无 embedding 接口），语义能力弱于 BGE；开启后准确率 65.3% → 59.0%（**−6.25pp**，v0.7 实测），故默认关闭，见 5.4 与 `eval/semantic_compare.json`；
+- **MySQL 迁移脚本已就绪但未在本机跑通**：`scripts/setup_mysql.py` 需要本机 root 密码，本次开发环境未提供，因此 MySQL 分支的代码路径未做端到端验证。评估与演示默认仍是 SQLite，不影响任何已有数字；
+- **评估固定 SQLite**：144 条用例的标准 SQL 是 SQLite 方言，`evaluate()` 会强制把后端钉回 sqlite。MySQL 只用于演示/部署，两者的数据由迁移脚本保证一致；不要把 MySQL 上的结果与评估数字混着说；
+- **LangGraph 外部框架基线（开题报告 5.1）未实施**；v0.12 起 SQL 生成走 LangChain（`langchain_openai.ChatOpenAI`），但**多步归因仍是自研运行时**，没有用 LangGraph 的图编排。论文措辞要区分「用了 LangChain」与「用了 LangGraph」；
 - 真实模型非确定性已量化：3 轮 63.9% / 64.6% / 65.3%，均值 64.6% ± 0.7%，论文主结论用均值；
 - 目前没有语义层/指标中台（这是**特意不做**的对照设计）；
 - 没有行列级权限、多租户、实时连库、流式输出；

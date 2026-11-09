@@ -12,6 +12,51 @@ Git 历史从 v0.2 开始记录（v0.1 时期还没建仓库，不伪造历史�
 
 ---
 
+## v0.12 · 2026-11-09 —— 技术栈对齐申报表
+
+**问题**：申报表列了 9 项技术，实际落地的只有 3 项（Python、LLM 接口、UCI 数据集）。
+FastAPI 换成了 `http.server`、MySQL 换成了 SQLite、SQLAlchemy 换成了裸 `sqlite3`、
+LangChain 换成了手写 urllib、pgvector 换成了自研 TF-IDF、Vue3+ECharts 换成了
+原生 JS + 手绘 SVG。答辩时「你说用了 MySQL，代码里为什么是 SQLite」这个问题
+没法圆，必须真补。
+
+**做法**：不是把旧的推倒重写，而是**加一层抽象、保留可复现的旧路径**——
+
+| 申报表技术 | 落地位置 | 说明 |
+|---|---|---|
+| FastAPI | `scripts/api.py` | 8 个接口 + `/docs` 自动文档；`serve.py` 保留为兜底 |
+| SQLAlchemy | `src/db/orm.py` | 四个声明式模型、引擎工厂、Inspector 反射 |
+| MySQL | `src/db/schema_mysql.sql` + `scripts/setup_mysql.py` | 建库/建表/导数/行数与聚合双重校验 |
+| LangChain | `src/llm/langchain_client.py` | `prompt \| ChatOpenAI \| StrOutputParser`，失败回落 urllib |
+| pgvector | `src/schema_retrieval/vector_store.py` | HNSW 索引 + `<=>` 检索，连不上退回内存向量 |
+| Vue 3 + ECharts | `src/web/index.html` + `src/web/vendor/` | 单文件 Vue 应用，图表组件化，依赖本地引入 |
+| Python / LLM / UCI | 沿用 | 不变 |
+
+**关键设计：评估口径不动。** 144 条用例的标准 SQL 全是 SQLite 方言，
+一旦因为 `.env` 里 `DB_BACKEND=mysql` 而切库，standard SQL 会整片语法报错，
+准确率从 64.6% 掉到个位数——那不是模型退化，是量错了对象。因此
+`evaluation/runner.py` 在 `evaluate()` 入口**强制把后端钉回 sqlite**，跑完不恢复
+（评估进程独立，不需要恢复）。演示/部署走 MySQL，评估永远走冻结库。
+
+**降级是显式的。** LangChain 缺失 → 回落 urllib；pgvector 连不上 → 内存向量，
+且 `search_or_fallback()` 会把来源（`pgvector` / `memory`）返回出来写进轨迹。
+之所以强调「显式」，是因为静默降级在答辩时答不出「你怎么证明用了 pgvector」。
+
+**验证**：
+- 单测 27/27 仍全绿（executor 改成委托 `db/query.py`，返回契约不变）；
+- FastAPI `/api/status`、`/api/schema`、`/api/ask` 实测返回正常，`/docs` 可打开；
+- 无头 Chrome 截图确认：Vue 应用正常挂载、表格与 ECharts 柱状图同屏渲染；
+- `python -m src.cli` / 冒烟集 / 正式集数字未变（评估口径未动）。
+
+**边界**：
+- MySQL 迁移脚本已就绪，但**需要本机 root 密码**才能执行，未在本次提交内跑通；
+- pgvector 依赖 Docker 里的 `pgvector/pgvector:pg16`，本机 Docker Desktop 的
+  WSL 后端被安全策略拦住，容器未起，代码走的是内存降级路径；
+- pgvector 里的向量是字符 n-gram 哈希，不是神经网络 embedding（DeepSeek 无
+  embedding 接口），语义泛化能力弱于 BGE，论文「局限性」要如实写。
+
+---
+
 ## v0.11 · 2026-11-09 —— 结果自动配图（纯 SVG，零依赖）
 
 **问题**：功能清单写的是「结果以表格和图表展示」，但实际只能出表。`choose_chart()`

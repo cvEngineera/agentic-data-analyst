@@ -94,6 +94,26 @@ class Generation:
     prompt: str = ""
 
 
+def _dialect_hints() -> tuple[str, str]:
+    """返回当前后端的「方言名」与「时间函数写法」提示。
+
+    v0.12 新增：演示链路可以切到 MySQL，而 SQLite 与 MySQL 的日期函数
+    完全不同（``datetime('now','-1 day')`` vs ``DATE_SUB(NOW(), INTERVAL 1 DAY)``）。
+    提示词里写错方言，模型生成的 SQL 会在校验层被当成语法错误、
+    或者在执行层报 unknown function——两种都会让演示看起来像「模型不行」。
+
+    评估固定走 SQLite，所以这里只影响演示/部署口径。
+
+    Returns:
+        ``(方言名, 时间表达提示)``
+    """
+    if settings.db_backend == "mysql":
+        return ("MySQL 8.0",
+                "时间用 MySQL 的 CURDATE() / NOW() / DATE_SUB(NOW(), INTERVAL N DAY) 表达")
+    return ("SQLite",
+            "时间用 SQLite 的 date()/datetime('now','-N day') 表达")
+
+
 def build_prompt(question: str, schema_context: str,
                  error_feedback: str | None = None) -> str:
     """构造 SQL 生成提示词。
@@ -101,7 +121,8 @@ def build_prompt(question: str, schema_context: str,
     每条约束都有对应理由：
         - 「只输出一条 SELECT」：便于程序直接解析，也减少写操作风险
         - 「只能用给出的表与字段」：配合 Schema 检索，避免模型编造列名
-        - 「时间用 SQLite 函数表达」：真实数据带时间戳，写死日期会导致评估漂移
+        - 「时间用当前方言的函数表达」：真实数据带时间戳，写死日期会导致评估漂移；
+          方言由 settings.db_backend 决定（SQLite 评估 / MySQL 演示）
         - 「结果必须带 LIMIT」：防止全表扫描（validator 还会再强制补一次）
 
     Args:
@@ -113,11 +134,12 @@ def build_prompt(question: str, schema_context: str,
     # `FROM temperature` 这种幻觉）。这里把数据库全部合法对象列成白名单，
     # 与 validator 的表白名单对齐——检索仍负责减噪，清单负责封死边界。
     allowed = "、".join(ALLOWED_TABLES)
+    dialect_name, time_hint = _dialect_hints()
     base = (
-        "你是 SQLite 数据分析助手，只输出一条可直接执行的 SELECT 语句，不要解释，不要 Markdown 代码块。\n"
+        f"你是 {dialect_name} 数据分析助手，只输出一条可直接执行的 SELECT 语句，不要解释，不要 Markdown 代码块。\n"
         f"数据库只包含这些表/视图：{allowed}。严禁使用清单之外的任何表名，也不要臆造字段。\n"
         "规则：只能使用下面给出的表与字段；禁止 DELETE/UPDATE/INSERT/DROP 等写操作；"
-        "时间用 SQLite 的 date()/datetime('now','-N day') 表达；结果必须带 LIMIT。\n\n"
+        f"{time_hint}；结果必须带 LIMIT。\n\n"
         f"表结构：\n{schema_context}\n\n用户问题：{question}\n"
     )
     if error_feedback:
@@ -144,6 +166,45 @@ def _mock_generate(question: str, error_feedback: str | None) -> tuple[str, str]
     if error_feedback:
         return FALLBACK_SQL, "fallback"
     return FALLBACK_SQL, "fallback"
+
+
+def _clean_sql(text: str) -> str:
+    """从模型输出里抽出可执行的 SQL。
+
+    模型（无论走哪条通道）常把结果包成三种形态：
+        1. ```sql ... ``` 代码块
+        2. 前面一句「好的，SQL 如下：」再给正文
+        3. 纯 SQL，但结尾多个分号
+
+    这里先按代码块切，取第一个以 SELECT/WITH 开头的块；没有代码块就
+    原样返回交给 validator 判定。**不做过度清洗**——比如不自动补
+    LIMIT、不改函数名，那些是校验层与提示词的职责，混在一起就没法
+    单独度量每层的作用了（消融实验要求各层可独立开关）。
+    """
+    text = text.strip()
+    if "```" in text:
+        for block in text.split("```"):
+            block = block.strip()
+            if block.lower().startswith("sql"):
+                block = block[3:].strip()
+            if block.lower().startswith("select") or block.lower().startswith("with"):
+                return block.rstrip(";")
+    return text.rstrip(";")
+
+
+def _langchain_generate(prompt: str) -> str:
+    """v0.12：走 LangChain 通道生成 SQL（申报表指定的方式）。
+
+    与 ``_real_generate`` 的唯一差别是「怎么把提示词发出去」：
+    这里交给 ``langchain_openai.ChatOpenAI``，连接池、重试、消息
+    格式都由框架处理；那条路径是手写的 urllib POST，用来做降级备用。
+
+    异常不在这里捕获，交给 generate_sql 统一兜底——只有那里知道
+    「这一次失败该不该改写评估口径」。
+    """
+    from ..llm import complete
+
+    return _clean_sql(complete(prompt))
 
 
 def _real_generate(prompt: str) -> str:
@@ -192,15 +253,7 @@ def _real_generate(prompt: str) -> str:
     with urllib.request.urlopen(req, timeout=30, context=ctx) as resp:
         data = json.loads(resp.read().decode("utf-8"))
     text = ((data.get("choices") or [{}])[0].get("message") or {}).get("content") or ""
-    text = text.strip()
-    if "```" in text:
-        for block in text.split("```"):
-            block = block.strip()
-            if block.lower().startswith("sql"):
-                block = block[3:].strip()
-            if block.lower().startswith("select") or block.lower().startswith("with"):
-                return block.rstrip(";")
-    return text.rstrip(";")
+    return _clean_sql(text)
 
 
 def generate_sql(question: str, schema_context: str,
@@ -217,7 +270,18 @@ def generate_sql(question: str, schema_context: str,
     prompt = build_prompt(question, schema_context, error_feedback)
     if settings.llm_mode == "real" and settings.real_mode_available:
         try:
-            sql = _real_generate(prompt)
+            # v0.12：默认走 LangChain（申报表指定的技术栈）；
+            # LLM_BACKEND=urllib 或 langchain 依赖缺失时，自动回落到
+            # 标准库直连实现。两者提示词、清洗、兜底行为完全一致，
+            # 所以切换通道不会改变评估口径——这一点在论文里要写清楚。
+            use_lc = False
+            if settings.llm_backend == "langchain":
+                try:
+                    from ..llm import is_available
+                    use_lc = is_available()
+                except Exception:
+                    use_lc = False
+            sql = _langchain_generate(prompt) if use_lc else _real_generate(prompt)
             return Generation(sql=sql, source="llm", category="llm", prompt=prompt)
         except Exception as exc:  # 模型不可用时兜底，保证系统永远有输出
             sql, category = _mock_generate(question, error_feedback)

@@ -139,12 +139,44 @@ def hybrid_score(question: str, table: str) -> float:
         ``semantic.py`` 内部实现，本函数与 retrieve() 一行都不用动。
     """
     score = keyword_score(question, table)
+    if settings.enable_vector_retrieval:
+        # v0.12：pgvector 分支。权重 0.8 —— 比语义分支（0.6）略高，
+        # 因为向量检索是按「整表文档」整体匹配，噪声比逐字段的字符
+        # n-gram 小；但仍低于关键词别名命中的 2.0/3.0，业务术语永远是
+        # 最强信号，向量只在关键词打平时起作用。
+        vec = _vector_scores(question)
+        score += 0.8 * vec.get(table, 0.0)
     if not settings.enable_semantic_retrieval:
         return score
     from .semantic import semantic_score  # 局部导入：默认路径不加载语义模块
     # 权重 0.6：关键词别名命中仍然是强信号（命中一次 +3），语义分只做
     # 补充排序，不能反过来压过明确的业务术语匹配。
     return score + 0.6 * semantic_score(question, table)
+
+
+# 单条问题的向量分缓存：retrieve() 会对每张表各调一次 hybrid_score()，
+# 若每次都查一遍向量库，5 张表就是 5 次往返。这里只缓存「上一个问题」，
+# 命中率高、内存占用恒定，换问题自动失效。
+_VEC_CACHE: dict[str, dict[str, float]] = {}
+
+
+def _vector_scores(question: str) -> dict[str, float]:
+    """取当前问题的向量相似度表 ``{表名: 分数}``。
+
+    连不上 pgvector 时 ``search_or_fallback`` 会自动退回内存向量，
+    因此这里不需要 try/except——降级逻辑收在 vector_store 一处，
+    避免「两个地方各写一套兜底」。
+    """
+    cached = _VEC_CACHE.get(question)
+    if cached is not None:
+        return cached
+    from .vector_store import search_or_fallback
+
+    rows, _source = search_or_fallback(question, top_k=8)
+    scores = {table: float(score) for table, score in rows}
+    _VEC_CACHE.clear()          # 只保留最近一个问题，避免长跑时无限增长
+    _VEC_CACHE[question] = scores
+    return scores
 
 
 def retrieve(question: str, available_tables: list[str], top_k: int = 4) -> RetrievalResult:

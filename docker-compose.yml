@@ -1,0 +1,31 @@
+# pgvector 服务（v0.12，对齐申报表技术栈）
+#
+# 为什么用容器：Windows 上装 PostgreSQL 还要单独编译 vector 扩展，
+# 而官方 pgvector/pgvector 镜像已经把扩展编好，起容器是成本最低的路径。
+# 端口映射到宿主机的 5433，避免和本机可能已有的 PostgreSQL(5432) 冲突。
+#
+# 启动：docker compose up -d
+# 建索引：python scripts/setup_pgvector.py
+# 连接串：postgresql://postgres:postgres@127.0.0.1:5433/bishe_vec
+services:
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: bishe-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bishe_vec
+      # 中文表注释要能存，字符集显式指定，避免在某些区域设置下变成 LATIN1
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgvector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d bishe_vec"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgvector_data:

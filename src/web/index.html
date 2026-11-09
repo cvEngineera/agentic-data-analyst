@@ -26,6 +26,7 @@ code,pre{font-family:"Cascadia Code","Consolas","SFMono-Regular",monospace}
 ::-webkit-scrollbar{width:9px;height:9px}
 ::-webkit-scrollbar-thumb{background:#3b3c45;border-radius:6px}
 ::-webkit-scrollbar-track{background:transparent}
+[v-cloak]{display:none}
 
 /* 顶部标题栏：居中产品名，右侧是真实状态而不是假的窗口按钮 */
 .titlebar{height:38px;background:var(--bg2);border-bottom:1px solid var(--line);
@@ -105,7 +106,6 @@ code,pre{font-family:"Cascadia Code","Consolas","SFMono-Regular",monospace}
 .hero{position:absolute;inset:0;display:flex;flex-direction:column;
   align-items:center;justify-content:center;padding:20px;
   transform:translateY(-26px)}
-.hero.hidden,.thread.hidden{display:none}
 .hero-inner{width:min(640px,100%)}
 .hi{color:var(--accent2);font-size:14px;margin-bottom:8px;letter-spacing:.5px}
 .hero h1{font-size:31px;font-weight:700;letter-spacing:.5px;margin:0 0 8px;color:#f4f4f8}
@@ -144,7 +144,6 @@ code,pre{font-family:"Cascadia Code","Consolas","SFMono-Regular",monospace}
   stroke-linecap:round;stroke-linejoin:round}
 .dock{position:absolute;left:0;right:0;bottom:0;padding:14px 28px 18px;
   background:linear-gradient(to top,var(--bg) 62%,transparent)}
-.dock:empty{display:none}
 .dock .composer{max-width:860px;margin:0 auto}
 
 /* 对话消息 */
@@ -160,7 +159,7 @@ code,pre{font-family:"Cascadia Code","Consolas","SFMono-Regular",monospace}
 .msg.ai .bubble{background:var(--panel);border:1px solid var(--line);
   border-radius:3px 12px 12px 12px;padding:13px 16px;flex:1}
 .meta{font-size:10.5px;color:var(--faint);margin-bottom:9px}
-.answer{font-size:13.5px;color:var(--fg);line-height:1.75}
+.answer{font-size:13.5px;color:var(--fg);line-height:1.75;white-space:pre-wrap}
 .badge-inline{display:inline-block;font-size:10.5px;border-radius:5px;
   padding:1px 7px;margin-right:6px;border:1px solid var(--line);color:var(--muted)}
 .badge-inline.ok{color:var(--ok);border-color:#2f5b48}
@@ -180,19 +179,18 @@ table{border-collapse:collapse;width:100%;font-size:11.5px;margin:8px 0 2px}
 th,td{border:1px solid var(--line);padding:6px 9px;text-align:left;color:var(--fg2)}
 th{background:var(--panel2);color:var(--muted);font-weight:600}
 .tbl-wrap{overflow:auto;max-height:290px}
-.chart-box{margin-top:8px;padding:10px 6px 4px;background:#1b1c22;border:1px solid #2c2d36;border-radius:10px}
-.chart-box svg{display:block;max-width:100%;height:auto}
+/* ECharts 容器：高度必须显式给，否则 echarts.init 拿到 0 高度画不出来 */
+.chart-box{margin-top:8px;padding:8px 6px 4px;background:#1b1c22;border:1px solid #2c2d36;
+  border-radius:10px;height:280px;width:100%}
 .pill{font-size:10.5px;color:var(--warn);background:#3a3020;border:1px solid #5b4a2b;
   border-radius:5px;padding:1px 7px;display:inline-block;margin-bottom:8px}
 .err{color:var(--danger);font-size:12.5px}
 
 /* 工作台抽屉：承载原先右栏的全部信息，主区因此能保持极简 */
-.mask{position:fixed;inset:38px 0 0;background:rgba(0,0,0,.46);z-index:20;display:none}
-.mask.show{display:block}
+.mask{position:fixed;inset:38px 0 0;background:rgba(0,0,0,.46);z-index:20}
 .drawer{position:fixed;top:38px;right:0;bottom:0;width:min(460px,94vw);
   background:var(--bg2);border-left:1px solid var(--line);z-index:21;
-  transform:translateX(101%);transition:transform .22s ease;overflow:auto;padding:18px 20px 40px}
-.drawer.open{transform:translateX(0)}
+  overflow:auto;padding:18px 20px 40px}
 .dr-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .dr-head h2{font-size:15px;margin:0;font-weight:600}
 .dr-close{border:0;background:transparent;color:var(--muted);font-size:19px}
@@ -211,522 +209,621 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
 .dbtn{background:var(--panel2);border:1px solid var(--line);border-radius:7px;
   padding:6px 11px;font-size:11.5px;color:var(--fg2);margin:4px 6px 0 0}
 .dbtn:hover{border-color:var(--accent);color:#fff}
-.hidden{display:none!important}
 .timeline{border-left:2px solid var(--line);padding-left:13px;margin:4px 0}
-.tl{position:relative;margin-bottom:11px;cursor:default}
+.tl{position:relative;margin-bottom:11px}
 .tl:before{content:"";position:absolute;left:-18px;top:6px;width:7px;height:7px;
   border-radius:50%;background:var(--accent)}
 .tl b{font-size:11.5px;color:var(--fg2)}.tl p{margin:2px 0 0;font-size:10.5px;color:var(--faint)}
-#changes{max-height:190px;font-size:10.5px;color:var(--muted)}
 @media(max-width:820px){.sidebar{width:180px}.hero h1{font-size:25px}.rail{width:44px}}
 @media(max-width:620px){.sidebar{display:none}.hero h1{font-size:22px}}
 </style>
 </head>
 <body>
 
-<div class="titlebar">
-  <div class="tb-left">
-    <button class="tb-ico" id="railToggle" title="折叠/展开侧栏">☰</button>
-    <div class="logo" title="Agentic Data Analyst">✦</div>
+<div id="app" v-cloak>
+  <div class="titlebar">
+    <div class="tb-left">
+      <button class="tb-ico" title="折叠/展开侧栏" @click="sidebarOpen=!sidebarOpen">☰</button>
+      <div class="logo" title="Agentic Data Analyst">✦</div>
+    </div>
+    <div class="tb-title">Agentic Data Analyst</div>
+    <div class="tb-right">
+      <span class="chip">{{ status ? status.version : 'v0.12' }}</span>
+      <span class="chip" :class="{on: status && status.llm_mode==='real'}">{{ status ? status.llm_mode : 'mock' }}</span>
+      <span class="chip" :class="{on: status && status.db_backend==='mysql'}"
+            :title="dbTitle">{{ dbBadge }}</span>
+      <button class="tb-btn" @click="drawer=true">工作台</button>
+    </div>
   </div>
-  <div class="tb-title">Agentic Data Analyst</div>
-  <div class="tb-right">
-    <span class="chip" id="verBadge">v0.11</span>
-    <span class="chip" id="modeBadge">mock</span>
-    <span class="chip" id="srcBadge">synthetic</span>
-    <button class="tb-btn" id="openWorkbench">工作台</button>
-  </div>
-</div>
 
-<div class="app">
-  <nav class="rail">
-    <div class="rail-top">
-      <div class="rail-logo" title="Agentic Data Analyst">A</div>
-      <button class="rail-ic active" data-panel="chat" title="对话">
-        <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 2 1.2-3.6A8 8 0 1 1 21 12z"/></svg>
-      </button>
-      <button class="rail-ic" data-panel="workbench" title="工作台 / 实验数据">
-        <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-      </button>
-      <button class="rail-ic" data-panel="data" title="数据源说明">
-        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
-      </button>
-    </div>
-    <div class="rail-bottom">
-      <button class="rail-ic" id="railHelp" title="命令与快捷键">&gt;_</button>
-      <div class="avatar" title="本地演示账号">W</div>
-    </div>
-  </nav>
-
-  <aside class="sidebar" id="sidebar">
-    <div class="sb-head">
-      <button class="newchat" id="newChat">＋ 新建对话</button>
-      <button class="icon-btn" id="searchBtn" title="搜索对话">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
-      </button>
-    </div>
-    <input class="search hidden" id="search" placeholder="搜索对话…">
-    <div class="sb-label"><span>近期对话</span><span id="sessCount">0</span></div>
-    <div class="sessions" id="sessions"></div>
-    <div class="sb-label"><span>快捷示例</span></div>
-    <div class="quick" id="quick"></div>
-    <div class="sb-foot" id="statusText">正在读取状态…</div>
-  </aside>
-
-  <main class="main">
-    <div class="hero" id="hero">
-      <div class="hero-inner">
-        <div class="hi">✦ 你好</div>
-        <h1>准备好向数据提问了吗？</h1>
-        <p class="sub">用一句自然语言查询数据库，Agent 自动找表、生成 SQL、校验执行并解释结果。</p>
-        <div id="heroSlot"></div>
-        <div class="hint">左侧「快捷示例」有 5 个可点的问题　·　<code>Ctrl + K</code> 聚焦　·　<code>Enter</code> 发送</div>
+  <div class="app">
+    <nav class="rail">
+      <div class="rail-top">
+        <div class="rail-logo" title="Agentic Data Analyst">A</div>
+        <button class="rail-ic" :class="{active: panel==='chat'}" title="对话" @click="panel='chat'">
+          <svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-8 8H7l-4 2 1.2-3.6A8 8 0 1 1 21 12z"/></svg>
+        </button>
+        <button class="rail-ic" :class="{active: panel==='workbench'}" title="工作台 / 实验数据" @click="panel='workbench'; drawer=true">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        </button>
+        <button class="rail-ic" title="数据源说明" @click="panel='data'; drawer=true">
+          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>
+        </button>
       </div>
-    </div>
-    <div class="thread hidden" id="thread"><div class="thread-inner" id="threadInner"></div></div>
-    <div class="dock" id="dockSlot"></div>
-  </main>
-</div>
+      <div class="rail-bottom">
+        <button class="rail-ic" title="命令与快捷键" @click="panel='help'; drawer=true">&gt;_</button>
+        <div class="avatar" title="本地演示账号">W</div>
+      </div>
+    </nav>
 
-<!-- 输入框是同一个 DOM 节点，在欢迎页中部与对话页底部之间移动，事件监听不丢失 -->
-<div class="composer" id="composer">
-  <textarea id="q" rows="2" placeholder="输入一句自然语言问题… Ctrl + K 聚焦，Enter 发送"></textarea>
-  <div class="composer-bar">
-    <div class="cb-left">
-      <button class="mini" id="plusBtn" title="插入一个示例问题">＋</button>
-      <button class="mini" id="settingsBtn" title="查看执行模式说明">⌄</button>
-      <span class="cb-hint" id="offlineTip">离线快照模式：示例问题可查看预录结果</span>
-    </div>
-    <div class="cb-right">
-      <select id="mode" title="执行模式">
-        <option value="auto">auto · 自动</option>
-        <option value="single">single · 单轮</option>
-        <option value="agent">agent · 多步</option>
-      </select>
-      <button class="send" id="askBtn" title="发送">
-        <svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-6-7-2z"/></svg>
-      </button>
-    </div>
+    <aside class="sidebar" :class="{collapsed: !sidebarOpen}">
+      <div class="sb-head">
+        <button class="newchat" @click="newSession">＋ 新建对话</button>
+        <button class="icon-btn" title="搜索对话" @click="searchOpen=!searchOpen">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+        </button>
+      </div>
+      <input class="search" v-if="searchOpen" v-model="search" placeholder="搜索对话…">
+      <div class="sb-label"><span>近期对话</span><span>{{ sessions.length }}</span></div>
+      <div class="sessions">
+        <div v-for="s in filteredSessions" :key="s.id" class="sess"
+             :class="{active: s.id===currentId}" @click="openSession(s.id)">
+          <span class="t">{{ s.title }}</span><span class="tm">{{ s.time }}</span>
+          <button class="del" title="删除" @click.stop="delSession(s.id)">×</button>
+        </div>
+        <div class="muted" style="padding:8px 10px" v-if="!filteredSessions.length">
+          {{ search ? '没有匹配的对话' : '还没有对话，点上方新建' }}
+        </div>
+      </div>
+      <div class="sb-label"><span>快捷示例</span></div>
+      <div class="quick">
+        <button v-for="q in QUICK" :key="q" @click="quickAsk(q)">{{ q }}</button>
+      </div>
+      <div class="sb-foot" :title="(status && status.dataset) || ''">{{ statusText }}</div>
+    </aside>
+
+    <main class="main">
+      <!-- 欢迎页：没有消息时显示 -->
+      <div class="hero" v-if="!messages.length">
+        <div class="hero-inner">
+          <div class="hi">✦ 你好</div>
+          <h1>准备好向数据提问了吗？</h1>
+          <p class="sub">用一句自然语言查询数据库，Agent 自动找表、生成 SQL、校验执行并解释结果。</p>
+          <div class="composer">
+            <textarea v-model="input" rows="2" @keydown.enter.exact.prevent="ask"
+              placeholder="输入一句自然语言问题… Ctrl + K 聚焦，Enter 发送"></textarea>
+            <div class="composer-bar">
+              <div class="cb-left">
+                <button class="mini" title="插入一个示例问题" @click="input=QUICK[0]">＋</button>
+                <span class="cb-hint">{{ onlineTip }}</span>
+              </div>
+              <div class="cb-right">
+                <select v-model="mode" title="执行模式">
+                  <option value="auto">auto · 自动</option>
+                  <option value="single">single · 单轮</option>
+                  <option value="agent">agent · 多步</option>
+                </select>
+                <button class="send" :disabled="busy" title="发送" @click="ask">
+                  <svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-6-7-2z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="hint">左侧「快捷示例」有 5 个可点的问题 · <code>Ctrl + K</code> 聚焦 · <code>Enter</code> 发送</div>
+        </div>
+      </div>
+
+      <!-- 对话流 -->
+      <div class="thread" v-else ref="threadEl">
+        <div class="thread-inner">
+          <div v-for="(m, i) in messages" :key="i" class="msg" :class="m.role">
+            <div class="av">{{ m.role === 'you' ? 'W' : '✦' }}</div>
+            <div class="bubble">
+              <!-- 用户消息 -->
+              <template v-if="m.role === 'you'">
+                <div>{{ m.text }}</div>
+              </template>
+              <!-- 助手消息 -->
+              <template v-else>
+                <div class="meta" v-if="m.result">
+                  <span class="badge-inline">{{ m.result.mode }}</span>
+                  步数 {{ m.result.steps }} · 耗时 {{ (m.result.elapsed_ms||0).toFixed(0) }} ms ·
+                  估算成本 {{ (m.result.estimated_cost_yuan||0).toFixed(4) }} 元
+                </div>
+                <div class="pill" v-if="m.pending">正在生成 SQL 并执行…</div>
+                <div class="answer" v-if="m.result">{{ m.result.conclusion }}</div>
+                <div class="err" v-if="m.error">出错了：{{ m.error }}</div>
+
+                <template v-if="m.result">
+                  <details v-if="m.result.sql">
+                    <summary>生成的 SQL</summary>
+                    <pre>{{ m.result.sql }}</pre>
+                    <button class="dbtn" @click="copy(m.result.sql)">{{ copied === m.result.sql ? '已复制' : '复制 SQL' }}</button>
+                  </details>
+
+                  <details v-if="m.result.columns && m.result.columns.length" open>
+                    <summary>结果（{{ (m.result.rows||[]).length }} 行 · {{ m.result.columns.length }} 列）</summary>
+                    <div class="tbl-wrap">
+                      <table>
+                        <thead><tr><th v-for="c in m.result.columns" :key="c">{{ c }}</th></tr></thead>
+                        <tbody>
+                          <tr v-for="(r, ri) in m.result.rows" :key="ri">
+                            <td v-for="(v, ci) in r" :key="ci">{{ v === null ? '—' : v }}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+
+                  <!-- ECharts 图表：由后端 chart 字段决定是否渲染 -->
+                  <chart-view v-if="m.result.chart && m.result.chart !== 'table'"
+                              :result="m.result"></chart-view>
+
+                  <details v-if="(m.result.trace||[]).length">
+                    <summary>执行轨迹（{{ m.result.trace.length }} 步）</summary>
+                    <div class="timeline">
+                      <div class="tl" v-for="t in m.result.trace" :key="t.step">
+                        <b>{{ t.step }}. {{ t.action }}</b>
+                        <p>{{ t.result_summary }}</p>
+                      </div>
+                    </div>
+                  </details>
+                </template>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 停靠输入框：有消息时显示 -->
+      <div class="dock" v-if="messages.length">
+        <div class="composer">
+          <textarea v-model="input" rows="2" @keydown.enter.exact.prevent="ask"
+            placeholder="继续提问… Enter 发送，Shift + Enter 换行"></textarea>
+          <div class="composer-bar">
+            <div class="cb-left">
+              <button class="mini" title="插入一个示例问题" @click="input=QUICK[0]">＋</button>
+              <span class="cb-hint">{{ onlineTip }}</span>
+            </div>
+            <div class="cb-right">
+              <select v-model="mode" title="执行模式">
+                <option value="auto">auto · 自动</option>
+                <option value="single">single · 单轮</option>
+                <option value="agent">agent · 多步</option>
+              </select>
+              <button class="send" :disabled="busy" title="发送" @click="ask">
+                <svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-3-6-7-2z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 工作台抽屉 -->
+  <div class="mask" v-if="drawer" @click="drawer=false"></div>
+  <div class="drawer" v-if="drawer">
+    <div class="dr-head"><h2>工作台 · 实验与版本</h2><button class="dr-close" @click="drawer=false">×</button></div>
+
+    <section>
+      <h3>数据源与运行状态</h3>
+      <div class="muted" v-if="status">
+        <div>版本 <b>{{ status.version }}</b> · 模型 <b>{{ status.llm_mode }}</b>（{{ status.llm_backend }}） ·
+          数据库 <b>{{ status.db_backend }}</b></div>
+        <div style="margin-top:5px">监测数据 <b>{{ status.sensor_rows }}</b> 行
+          <span v-if="status.mysql_sensor_rows !== null"> · MySQL <b>{{ status.mysql_sensor_rows }}</b> 行</span>
+          · 冒烟集 <b>{{ status.cases_smoke }}</b> 条 · 正式集 <b>{{ status.cases_full }}</b> 条 · 报告 <b>{{ status.reports.length }}</b> 份</div>
+        <div style="margin-top:6px;color:var(--faint)">{{ status.dataset }}<span v-if="status.data_note"> · {{ status.data_note }}</span></div>
+      </div>
+      <div class="muted" v-else>
+        服务未启动，无法读取数据源元信息。运行 <code>python scripts/api.py</code> 后刷新。
+      </div>
+    </section>
+
+    <section>
+      <h3>当前评估数字</h3>
+      <div class="kpi">
+        <div><strong>15/15</strong><span>冒烟集（链路）</span></div>
+        <div><strong>64.6%</strong><span>真实模型 3 轮均值 ±0.7%</span></div>
+        <div><strong>8/8</strong><span>危险语句拦截</span></div>
+        <div><strong>27/27</strong><span>单元测试</span></div>
+      </div>
+      <div class="notice"><code>LLM_MODE=real</code> 连跑 3 轮：63.9% / 64.6% / 65.3%，均值 <strong>64.6% ± 0.7%</strong>（论文应引用这个）。同口径 mock 基线 23.6%，安全拦截 8/8，消融显示 Schema 检索贡献最大（−7.64pp）。</div>
+      <button class="dbtn" :disabled="busyEval" @click="runEval">{{ busyEval ? '评估中…' : '现跑冒烟评估' }}</button>
+      <button class="dbtn" :disabled="busyAbl" @click="runAblation">{{ busyAbl ? '消融中…' : '现跑五组消融' }}</button>
+      <pre v-if="evalOut">{{ evalOut }}</pre>
+    </section>
+
+    <section>
+      <h3>消融实验（真实模型）</h3>
+      <div class="tbl-wrap"><table>
+        <tr><th>配置</th><th>准确率</th><th>Δ</th><th>上下文</th></tr>
+        <tr><td>full</td><td>64.6%</td><td>—</td><td>445</td></tr>
+        <tr><td>no_fk_expansion</td><td>61.8%</td><td>−2.77pp</td><td>330</td></tr>
+        <tr><td>no_retrieval</td><td>56.9%</td><td>−7.64pp</td><td>809</td></tr>
+        <tr><td>no_self_correction</td><td>62.5%</td><td>−2.08pp</td><td>445</td></tr>
+        <tr><td>minimal</td><td>57.6%</td><td>−6.94pp</td><td>809</td></tr>
+      </table></div>
+      <p class="muted">Schema 检索贡献最大。full 组 64.6% 与单独评估 65.3% 差 1 题，是 LLM 非确定性的实测证据，论文应多次运行取均值。</p>
+    </section>
+
+    <section>
+      <h3>技术栈落地情况（v0.12）</h3>
+      <div class="tbl-wrap"><table>
+        <tr><th>申报表技术</th><th>落地方式</th></tr>
+        <tr><td>FastAPI</td><td><code>scripts/api.py</code>，含 /docs</td></tr>
+        <tr><td>Vue 3 + ECharts</td><td>本页面，vendor 目录本地引入</td></tr>
+        <tr><td>MySQL</td><td><code>scripts/setup_mysql.py</code> 迁移</td></tr>
+        <tr><td>SQLAlchemy</td><td><code>src/db/orm.py</code> 模型与反射</td></tr>
+        <tr><td>LangChain</td><td><code>src/llm/langchain_client.py</code></td></tr>
+        <tr><td>pgvector</td><td><code>src/schema_retrieval/vector_store.py</code></td></tr>
+      </table></div>
+    </section>
+
+    <section>
+      <h3>版本演进（每步都有可用版本）</h3>
+      <div class="timeline">
+        <div class="tl"><b>v0.1 · 基线</b><p>七个模块骨架、命令行、15 条冒烟集、9 个单测。</p></div>
+        <div class="tl"><b>v0.2 · 第 2 增量</b><p>144 条正式评估集、五种判定口径、五组消融开关、回归门禁。</p></div>
+        <div class="tl"><b>v0.3 · 可交互版本</b><p>浏览器界面、版本可视化、Git 提交与标签。</p></div>
+        <div class="tl"><b>v0.3.1 · 离线也能点</b><p>内嵌 5 个快捷问题的真实结果快照。</p></div>
+        <div class="tl"><b>v0.3.2 · 动态 diff</b><p>代码变化区自动取最近两个 tag 对比。</p></div>
+        <div class="tl"><b>v0.3.3 · 项目标识统一</b><p>本地目录与云端仓库统一为 agentic-data-analyst。</p></div>
+        <div class="tl"><b>v0.4 · UCI 真实数据接入</b><p>20560 条真实记录，两种数据源可切换。</p></div>
+        <div class="tl"><b>v0.4.1 · 评估口径独立</b><p>标准 SQL 独立人工标注，评估集扩到 144 条。</p></div>
+        <div class="tl"><b>v0.5 · 真实模型零依赖接入</b><p>标准库实现 OpenAI 兼容协议，密钥本地防护。</p></div>
+        <div class="tl"><b>v0.6 · 真实模型实测</b><p>单轮 65.3%，逐层消融产出非零 delta。</p></div>
+        <div class="tl"><b>v0.7 · 补做 B 类</b><p>3 轮重复实验 64.6% ± 0.7%、指标差距分析、语义检索对照。</p></div>
+        <div class="tl"><b>v0.8 · 可选联网实时采集</b><p>Open-Meteo 写入独立 live.db，评估库保持冻结。</p></div>
+        <div class="tl"><b>v0.9 · 界面改版</b><p>对齐 Chat2DB 深色客户端：会话列表、对话式结果、工作台抽屉。</p></div>
+        <div class="tl"><b>v0.10 · 意图闸门</b><p>非数据问题不生成 SQL、不连库、不调模型。</p></div>
+        <div class="tl"><b>v0.11 · 结果自动配图</b><p>回答里直接出柱状/折线/饼图。</p></div>
+        <div class="tl"><b>v0.12 · 技术栈对齐申报表</b><p>FastAPI + SQLAlchemy + MySQL + LangChain + pgvector + Vue3/ECharts 全部落地。</p></div>
+      </div>
+    </section>
+
+    <section>
+      <h3>代码变化（来自 git）</h3>
+      <pre>{{ changes || '读取中…' }}</pre>
+    </section>
+
+    <section>
+      <h3>命令速查</h3>
+      <pre>python scripts/api.py          # FastAPI 服务（8000）
+python scripts/serve.py        # 零依赖兜底服务（8765）
+python scripts/setup_mysql.py  # SQLite → MySQL 迁移
+python scripts/setup_pgvector.py
+python scripts/run_eval.py</pre>
+      <p class="muted">只监听 127.0.0.1。默认 mock 完全离线；现场演示真实模型需以 <code>LLM_MODE=real</code> 重启。</p>
+    </section>
   </div>
 </div>
 
-<div class="mask" id="mask"></div>
-<div class="drawer" id="drawer">
-  <div class="dr-head"><h2>工作台 · 实验与版本</h2><button class="dr-close" id="closeDrawer">×</button></div>
-
-  <section id="dataSection">
-    <h3>数据源与运行状态</h3>
-    <div class="muted" id="dataInfo">读取中…</div>
-  </section>
-
-  <section>
-    <h3>当前评估数字</h3>
-    <div class="kpi">
-      <div><strong id="kSmoke">15/15</strong><span>冒烟集（链路）</span></div>
-      <div><strong id="kFull">64.6%</strong><span>真实模型 3 轮均值 ±0.7%</span></div>
-      <div><strong id="kSafety">8/8</strong><span>危险语句拦截</span></div>
-      <div><strong id="kTests">27/27</strong><span>单元测试</span></div>
-    </div>
-    <div class="notice"><code>LLM_MODE=real</code> 连跑 3 轮：63.9% / 64.6% / 65.3%，均值 <strong>64.6% ± 0.7%</strong>（论文应引用这个）。同口径 mock 基线 23.6%，安全拦截 8/8，消融显示 Schema 检索贡献最大（−7.64pp）。</div>
-    <button class="dbtn" id="evalBtn">现跑冒烟评估</button>
-    <button class="dbtn" id="ablBtn">现跑五组消融</button>
-    <pre id="evalOut" class="hidden"></pre>
-  </section>
-
-  <section>
-    <h3>消融实验（真实模型）</h3>
-    <div class="tbl-wrap"><table>
-      <tr><th>配置</th><th>准确率</th><th>Δ</th><th>上下文</th></tr>
-      <tr><td>full</td><td>64.6%</td><td>—</td><td>445</td></tr>
-      <tr><td>no_fk_expansion</td><td>61.8%</td><td>−2.77pp</td><td>330</td></tr>
-      <tr><td>no_retrieval</td><td>56.9%</td><td>−7.64pp</td><td>809</td></tr>
-      <tr><td>no_self_correction</td><td>62.5%</td><td>−2.08pp</td><td>445</td></tr>
-      <tr><td>minimal</td><td>57.6%</td><td>−6.94pp</td><td>809</td></tr>
-    </table></div>
-    <p class="muted">Schema 检索贡献最大。full 组 64.6% 与单独评估 65.3% 差 1 题，是 LLM 非确定性的实测证据，论文应多次运行取均值。</p>
-  </section>
-
-  <section>
-    <h3>版本演进（每步都有可用版本）</h3>
-    <div class="timeline">
-      <div class="tl"><b>v0.1 · 2026-11-07 基线</b><p>七个模块骨架、命令行、15 条冒烟集、9 个单测。</p></div>
-      <div class="tl"><b>v0.2 · 2026-11-07 第 2 增量</b><p>104 条正式评估集、五种判定口径、五组消融开关、回归门禁。</p></div>
-      <div class="tl"><b>v0.3 · 2026-11-08 可交互版本</b><p>零依赖浏览器界面、版本可视化、Git 提交与标签。</p></div>
-      <div class="tl"><b>v0.3.1 · 2026-11-08 离线也能点</b><p>内嵌 5 个快捷问题的真实结果快照。</p></div>
-      <div class="tl"><b>v0.3.2 · 2026-11-08 动态 diff</b><p>代码变化区自动取最近两个 tag 对比。</p></div>
-      <div class="tl"><b>v0.3.3 · 2026-11-09 项目标识统一</b><p>本地目录与云端仓库统一为 agentic-data-analyst。</p></div>
-      <div class="tl"><b>v0.4 · 2026-11-09 UCI 真实数据接入</b><p>20560 条真实记录，两种数据源可切换。</p></div>
-      <div class="tl"><b>v0.4.1 · 2026-11-09 评估口径独立</b><p>标准 SQL 独立人工标注，评估集扩到 144 条。</p></div>
-      <div class="tl"><b>v0.5 · 2026-11-09 真实模型零依赖接入</b><p>标准库实现 OpenAI 兼容协议，密钥本地防护。</p></div>
-      <div class="tl"><b>v0.6 · 2026-11-09 真实模型实测</b><p>单轮 65.3%，逐层消融产出非零 delta。</p></div>
-      <div class="tl"><b>v0.7 · 2026-11-09 补做 B 类</b><p>3 轮重复实验 64.6% ± 0.7%、指标差距分析、语义检索对照。</p></div>
-      <div class="tl"><b>v0.8 · 2026-11-09 可选联网实时采集</b><p>Open-Meteo 写入独立 live.db，评估库保持冻结。</p></div>
-      <div class="tl"><b>v0.9 · 2026-11-09 界面改版</b><p>对齐 Chat2DB 深色客户端：会话列表、对话式结果、工作台抽屉。</p></div>
-      <div class="tl"><b>v0.10 · 2026-11-09 意图闸门</b><p>问「你好」「你是谁」不再返回无关数据表；非数据问题不生成 SQL、不连库、不调模型。</p></div>
-      <div class="tl"><b>v0.11 · 2026-11-09 结果自动配图</b><p>回答里直接出柱状/折线/饼图（纯 SVG，不依赖 ECharts 与 matplotlib），图与表并列可核对。</p></div>
-    </div>
-    <div class="notice">以后每完成一步：保证可运行 → 更新 CHANGELOG → <code>git commit</code> + 打 tag → 下方刷新即可看到新增文件与改动行数。</div>
-  </section>
-
-  <section>
-    <h3>代码变化（来自 git）</h3>
-    <pre id="changes">读取中…</pre>
-  </section>
-
-  <section>
-    <h3>命令速查</h3>
-    <pre>python scripts/serve.py
-python -m src.cli "3号教室昨天的平均温度是多少"
-python scripts/run_eval.py
-git diff v0.10 v0.11 --stat</pre>
-    <p class="muted">只监听 127.0.0.1。当前默认 mock 完全离线；要现场演示真实模型需以 <code>LLM_MODE=real</code> 重启服务。</p>
-  </section>
-</div>
-
+<script src="vendor/vue.global.prod.js"></script>
+<script src="vendor/echarts.min.js"></script>
 <script>
 /* 离线快照：由 scripts/build_snapshots.py 注入，静态打开页面也能点示例问题 */
-const SNAPSHOTS = {"3号教室昨天的平均温度是多少":{"question":"3号教室昨天的平均温度是多少","mode":"single","conclusion":"已返回 1 行结果，共 1 个字段。","columns":["avg_temperature"],"rows":[[22.58]],"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.2, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.1,"sql":""},{"step":2,"action":"text2sql","params":{"question":"3号教室昨天的平均温度是多少"},"result_summary":"source=mock attempts=1 rows=1 error=none","elapsed_ms":223.71,"sql":"SELECT ROUND(AVG(d.temperature),2) AS avg_temperature FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day') LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":250.05209993105382,"estimated_cost_yuan":0.0008,"fallback_used":false,"chart":"table"},"这周哪个教室空气质量最差，为什么":{"question":"这周哪个教室空气质量最差，为什么","mode":"agent","conclusion":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 2.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.08,"sql":""},{"step":2,"action":"text2sql","params":{"question":"这周哪个教室空气质量最差，为什么"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":4.48,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE d.ts >= datetime('now','-7 day') GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"},{"step":3,"action":"execute_sql","params":{"target":"3号教室"},"result_summary":"告警记录 2 条；error=none","elapsed_ms":1.83,"sql":"SELECT a.ts, a.type, a.level FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id WHERE s.name = ? ORDER BY a.ts DESC LIMIT 10;"},{"step":4,"action":"explain","params":{"rows":5},"result_summary":"3号教室 的 CO2 均值明显偏高；追加查询发现该设备存在 CALIBRATION_DRIFT（校准偏移）告警，读数偏高可能与传感器校准有关，建议先做标定复核再判断是否为真实空气质量恶化。","elapsed_ms":0.0,"sql":""}],"steps":4,"denied":false,"error":"","elapsed_ms":9.2795001110062,"estimated_cost_yuan":0.001386,"fallback_used":false,"chart":"bar"},"报警次数最多的设备属于哪个楼层":{"question":"报警次数最多的设备属于哪个楼层","mode":"single","conclusion":"已返回 5 行结果，共 3 个字段。","columns":["floor","site_name","alarm_count"],"rows":[[1,"3号教室",2],[1,"1号教室",1],[2,"2号教室",1],[2,"4号教室",1],[3,"5号教室",1]],"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['alarm', 'device', 'site']；外键扩展 []；打分 {'alarm': 4.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 2.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.07,"sql":""},{"step":2,"action":"text2sql","params":{"question":"报警次数最多的设备属于哪个楼层"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":6.82,"sql":"SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count FROM alarm a JOIN device dv ON a.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5"}],"steps":2,"denied":false,"error":"","elapsed_ms":9.899800061248243,"estimated_cost_yuan":0.00073,"fallback_used":false,"chart":"bar"},"删除所有设备记录":{"question":"删除所有设备记录","mode":"single","conclusion":"已拦截危险语句，未执行。","columns":[],"rows":[],"sql":"DELETE FROM device;","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['device', 'site']；外键扩展 ['site']；打分 {'alarm': 0.0, 'device': 2.0, 'sensor_data': 0.0, 'site': 0.0, 'v_site_air_quality': 0.0}","elapsed_ms":0.06,"sql":""},{"step":2,"action":"text2sql","params":{"question":"删除所有设备记录"},"result_summary":"source=mock attempts=1 rows=0 error=只允许 SELECT 查询，写操作已拦截","elapsed_ms":0.03,"sql":"DELETE FROM device;"}],"steps":2,"denied":true,"error":"只允许 SELECT 查询，写操作已拦截","elapsed_ms":2.937800018116832,"estimated_cost_yuan":0.000408,"fallback_used":false,"chart":"table"},"各教室本月的 CO2 均值排名":{"question":"各教室本月的 CO2 均值排名","mode":"single","conclusion":"已返回 5 行结果，共 2 个字段。","columns":["site_name","avg_co2"],"rows":[["3号教室",694.07],["1号教室",561.68],["5号教室",560.54],["4号教室",560.24],["2号教室",559.9]],"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000","trace":[{"step":1,"action":"schema_search","params":{"top_k":4},"result_summary":"命中表 ['sensor_data', 'site', 'v_site_air_quality', 'device']；外键扩展 ['device']；打分 {'alarm': 0.0, 'device': 0.0, 'sensor_data': 5.0, 'site': 2.0, 'v_site_air_quality': 0.2}","elapsed_ms":0.08,"sql":""},{"step":2,"action":"text2sql","params":{"question":"各教室本月的 CO2 均值排名"},"result_summary":"source=mock attempts=1 rows=5 error=none","elapsed_ms":4.83,"sql":"SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 FROM sensor_data d JOIN device dv ON d.device_id = dv.id JOIN site s ON dv.site_id = s.id GROUP BY s.name ORDER BY avg_co2 DESC LIMIT 1000"}],"steps":2,"denied":false,"error":"","elapsed_ms":9.168499964289367,"estimated_cost_yuan":0.00081,"fallback_used":false,"chart":"bar"}};
-const $ = id => document.getElementById(id);
-const QUICK = [
-  "3号教室昨天的平均温度是多少",
-  "这周哪个教室空气质量最差，为什么",
-  "报警次数最多的设备属于哪个楼层",
-  "删除所有设备记录",
-  "各教室本月的 CO2 均值排名",
-];
-const STORE_KEY = "ada.sessions.v1";
-let online = false, status = null, sessions = [], currentId = null, messages = [];
+const SNAPSHOTS = {};
 
-/* ── 网络与状态 ─────────────────────────────────────────────── */
-async function api(path) {
-  try {
-    const r = await fetch(path, {cache: "no-store"});
-    if (!r.ok) throw new Error("HTTP " + r.status);
-    return await r.json();
-  } catch (e) { return null; }
-}
-async function loadStatus() {
-  const s = await api("/api/status");
-  status = s;
-  if (!s) {
-    $("statusText").textContent = "静态快照（未启动服务）· 示例问题可离线查看";
-    $("dataInfo").textContent = "服务未启动，无法读取数据源元信息。运行 python scripts/serve.py 后刷新。";
-    return;
-  }
-  online = true;
-  $("offlineTip").textContent = "实时模式 · 任意问题都会查库";
-  $("verBadge").textContent = s.version;
-  $("modeBadge").textContent = s.llm_mode;
-  $("modeBadge").className = "chip" + (s.llm_mode === "real" ? " on" : "");
-  $("srcBadge").textContent = s.data_source || "synthetic";
-  $("statusText").textContent =
-    `数据库 ${s.db_exists ? "已就绪" : "未建"} · ${s.sensor_rows} 行监测数据 · ` +
-    `冒烟 ${s.cases_smoke} / 正式 ${s.cases_full} 条 · ${s.reports.length} 份报告`;
-  $("statusText").title = (s.dataset || "") + (s.data_note ? " · " + s.data_note : "");
-  $("dataInfo").innerHTML =
-    `<div>版本 <b>${esc(s.version)}</b> · 模型 <b>${esc(s.llm_mode)}</b> · 数据源 <b>${esc(s.data_source || "synthetic")}</b></div>` +
-    `<div style="margin-top:5px">监测数据 <b>${s.sensor_rows}</b> 行 · 冒烟集 <b>${s.cases_smoke}</b> 条 · 正式集 <b>${s.cases_full}</b> 条 · 报告 <b>${s.reports.length}</b> 份</div>` +
-    `<div style="margin-top:6px;color:var(--faint)">${esc(s.dataset || "")}${s.data_note ? " · " + esc(s.data_note) : ""}</div>`;
-}
-async function loadChanges() {
-  const c = await api("/api/changes");
-  $("changes").textContent = c
-    ? ["标签：\n" + c.tags, "提交历史：\n" + c.log,
-       (c.diff_label || "版本变更") + "：\n" + c.diff_prev,
-       "工作区状态：\n" + (c.status || "(干净)")].join("\n\n")
-    : "（启动 python scripts/serve.py 后这里显示 git 提交、标签与 diff --stat）";
-}
-function esc(s) {
-  return String(s == null ? "" : s).replace(/[&<>"']/g,
-    m => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
-}
+/* ── 图表组件：把一次查询结果画成 ECharts 图 ─────────────────────
+   为什么做成组件而不是在渲染函数里手动 init：
+   ECharts 实例必须与 DOM 生命周期绑定，消息列表会随会话切换整体重绘，
+   手动管理容易出现「实例挂在已销毁的节点上」然后图表不刷新。
+   组件化后 mounted/unmounted 各自负责 init 与 dispose，边界清楚。 */
+const ChartView = {
+  props: { result: { type: Object, required: true } },
+  template: '<div class="chart-box" ref="box"></div>',
+  data() { return { chart: null }; },
+  mounted() {
+    this.render();
+    this._resize = () => this.chart && this.chart.resize();
+    window.addEventListener('resize', this._resize);
+  },
+  beforeUnmount() {
+    window.removeEventListener('resize', this._resize);
+    if (this.chart) { this.chart.dispose(); this.chart = null; }
+  },
+  watch: {
+    result() { this.$nextTick(this.render); },
+  },
+  methods: {
+    render() {
+      const r = this.result || {};
+      const cols = r.columns || [], rows = r.rows || [];
+      if (!cols.length || !rows.length) return;
+      const box = this.$refs.box;
+      if (!box) return;
+      if (!this.chart) this.chart = echarts.init(box, null, { renderer: 'canvas' });
 
-/* ── 会话历史：localStorage，纯前端，不进服务端也不进仓库 ───────── */
-function loadSessions() {
-  try { sessions = JSON.parse(localStorage.getItem(STORE_KEY) || "[]"); }
-  catch (e) { sessions = []; }
-  if (!Array.isArray(sessions)) sessions = [];
-}
-function saveSessions() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(sessions.slice(0, 30))); } catch (e) {}
-}
-function now() {
-  return new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"});
-}
-function renderSessions(filter) {
-  const box = $("sessions");
-  const f = (filter || "").trim();
-  const list = sessions.filter(s => !f || (s.title || "").includes(f));
-  $("sessCount").textContent = sessions.length;
-  box.innerHTML = list.length ? list.map(s =>
-    `<div class="sess ${s.id === currentId ? "active" : ""}" data-id="${esc(s.id)}">
-       <span class="t">${esc(s.title)}</span><span class="tm">${esc(s.time)}</span>
-       <button class="del" data-del="${esc(s.id)}" title="删除">×</button></div>`).join("")
-    : `<div class="muted" style="padding:8px 10px">${f ? "没有匹配的对话" : "还没有对话，点上方新建"}</div>`;
-  box.querySelectorAll(".sess").forEach(el => el.onclick = e => {
-    if (e.target.dataset.del) {
-      const id = e.target.dataset.del;
-      sessions = sessions.filter(s => s.id !== id);
-      if (currentId === id) newSession(); else { saveSessions(); renderSessions(); }
-      return;
+      const kind = r.chart === 'line' ? 'line' : (r.chart === 'pie' ? 'pie' : 'bar');
+      // 数值列：只要该列有一行是数字就当指标列（MySQL 的 DECIMAL 会被
+      // 序列化成字符串，所以这里比 typeof 更宽松一点）
+      const isNum = (v) => v !== null && v !== '' && !isNaN(Number(v));
+      const numIdx = cols.map((_, i) => i).filter(i => rows.some(row => isNum(row[i])));
+      const xIdx = cols.map((_, i) => i).find(i => !numIdx.includes(i));
+
+      const dark = {
+        textStyle: { color: '#c7c8d0', fontSize: 11 },
+        grid: { left: 46, right: 18, top: 24, bottom: 30 },
+        tooltip: { trigger: kind === 'pie' ? 'item' : 'axis',
+                   backgroundColor: '#24252b', borderColor: '#3d3e47', textStyle: { color: '#e9e9ef' } },
+        legend: { textStyle: { color: '#858894' }, top: 0 },
+        xAxis: { type: 'category', axisLine: { lineStyle: { color: '#3d3e47' } },
+                 axisLabel: { color: '#858894', fontSize: 10 },
+                 data: rows.map(row => xIdx === undefined ? '' : String(row[xIdx])) },
+        yAxis: { type: 'value', splitLine: { lineStyle: { color: '#2c2d36' } },
+                 axisLabel: { color: '#858894', fontSize: 10 } },
+      };
+
+      let option;
+      if (kind === 'pie') {
+        const vi = numIdx[0] ?? 1;
+        option = {
+          backgroundColor: 'transparent',
+          tooltip: dark.tooltip,
+          legend: { ...dark.legend, orient: 'vertical', left: 4, top: 8 },
+          series: [{
+            type: 'pie', radius: ['38%', '66%'], center: ['62%', '54%'],
+            itemStyle: { borderColor: '#1b1c22', borderWidth: 2 },
+            label: { color: '#c7c8d0', fontSize: 10, formatter: '{b}\n{c}' },
+            data: rows.map(row => ({
+              name: String(xIdx === undefined ? '' : row[xIdx]),
+              value: Number(row[vi]),
+            })),
+          }],
+          color: ['#8b5cf6', '#5fd3a0', '#f0b96b', '#7aa2f7', '#f08a8a', '#a78bfa'],
+        };
+      } else {
+        option = {
+          backgroundColor: 'transparent',
+          ...dark,
+          series: numIdx.map((i, k) => ({
+            name: cols[i],
+            type: kind,
+            smooth: kind === 'line',
+            symbolSize: 5,
+            itemStyle: { color: ['#8b5cf6', '#5fd3a0', '#f0b96b'][k % 3],
+                         borderRadius: kind === 'bar' ? [3, 3, 0, 0] : 0 },
+            lineStyle: { width: 2 },
+            areaStyle: kind === 'line' ? { opacity: .12 } : undefined,
+            data: rows.map(row => (isNum(row[i]) ? Number(row[i]) : null)),
+          })),
+        };
+      }
+      this.chart.setOption(option, true);
+    },
+  },
+};
+
+const { createApp, reactive, computed, ref, toRefs, nextTick } = Vue;
+
+createApp({
+  components: { 'chart-view': ChartView },
+  setup() {
+    const QUICK = [
+      '3号教室昨天的平均温度是多少',
+      '这周哪个教室空气质量最差，为什么',
+      '报警次数最多的设备属于哪个楼层',
+      '删除所有设备记录',
+      '各教室本月的 CO2 均值排名',
+    ];
+    const STORE_KEY = 'ada.sessions.v2';
+
+    const s = reactive({
+      status: null,
+      online: false,
+      panel: 'chat',
+      drawer: false,
+      sidebarOpen: true,
+      searchOpen: false,
+      search: '',
+      sessions: [],
+      currentId: null,
+      messages: [],
+      input: '',
+      mode: 'auto',
+      busy: false,
+      busyEval: false,
+      busyAbl: false,
+      evalOut: '',
+      changes: '',
+      copied: '',
+      QUICK,
+    });
+
+    // 对话区 DOM 引用：Vue 3 的模板 ref 必须是一个 ref 对象，
+    // 直接放在 reactive 里拿到的是「解包后的值」，scrolling 会失效。
+    const threadEl = ref(null);
+
+    /* ── 工具函数 ───────────────────────────────────────────── */
+    const now = () => new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    const esc = (v) => String(v == null ? '' : v);
+
+    /* 静态打开（file://）时 fetch 会失败，此时退回内嵌快照，
+       保证「不启动服务也能点示例问题」这个 v0.3.1 的性质不丢。 */
+    async function api(path, opts) {
+      try {
+        const r = await fetch(path, { cache: 'no-store', ...(opts || {}) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return await r.json();
+      } catch (e) {
+        return null;
+      }
     }
-    switchSession(el.dataset.id);
-  });
-}
-function newSession() {
-  // 当前已经是空会话时直接复用，避免反复点「新建对话」堆出一排空条目
-  const cur = sessions.find(x => x.id === currentId);
-  if (cur && !(cur.messages || []).length) {
-    messages = []; renderThread(); return;
-  }
-  currentId = "s" + Date.now();
-  messages = [];
-  sessions.unshift({id: currentId, title: "新对话", time: now(), messages: []});
-  saveSessions(); renderSessions(); renderThread();
-}
-function switchSession(id) {
-  const s = sessions.find(x => x.id === id);
-  if (!s) return;
-  currentId = id; messages = s.messages || [];
-  renderSessions(); renderThread();
-  closeDrawer();
-}
-function commitSession() {
-  const s = sessions.find(x => x.id === currentId);
-  if (!s) return;
-  s.messages = messages;
-  s.time = now();
-  saveSessions(); renderSessions();
-}
 
-/* ── 结果卡片：把一次查询渲染成一条 AI 消息 ───────────────────── */
-/* 纯 SVG 自动配图：不引 ECharts / Chart.js，也不依赖服务端 matplotlib。
-   这样静态双击页面也能出图，答辩现场不赌网络和依赖。
-   图表类型由后端 choose_chart() 决定（line / bar / pie / table），
-   前端只负责按类型画，保证命令行、网页、离线快照三处判断一致。 */
-const C_BAR = "#8b5cf6", C_LINE = "#22d3ee", AXIS = "#3b3c45", TXT = "#9a9ba8";
-function svgChart(kind, columns, rows) {
-  if (!kind || kind === "table" || !rows || rows.length < 2 || !columns) return "";
-  const n = rows.length;
-  const num = v => { const x = Number(v); return Number.isFinite(x) ? x : null; };
-  // 数值列：可转数字的行数最多的那一列（时间戳、名称等字符串列会被排除）
-  let vi = -1, hit = 0;
-  for (let j = 0; j < columns.length; j++) {
-    const c = rows.reduce((s, r) => s + (num(r[j]) !== null ? 1 : 0), 0);
-    if (c > hit) { hit = c; vi = j; }
-  }
-  if (vi < 0 || hit < 2) return "";
-  // 标签列：优先取非数值列（教室名、时间戳），没有就用行号
-  const li = columns.findIndex((c, j) => j !== vi && rows.reduce((s, r) => s + (num(r[j]) === null ? 1 : 0), 0) >= n * 0.6);
-  const short = s => { s = String(s); const m = s.match(/\d{2}:\d{2}/); return m ? m[0] : (s.length > 8 ? s.slice(0, 8) : s); };
-  // 点数限制在 24 个以内，超出按等间隔抽样，避免柱子/折线挤成一团
-  const step = Math.max(1, Math.ceil(n / 24));
-  const pts = [];
-  for (let i = 0; i < n; i += step) pts.push({ label: li >= 0 ? short(rows[i][li]) : String(i + 1), v: num(rows[i][vi]) });
-  const vv = pts.map(p => p.v).filter(v => v !== null);
-  if (!vv.length) return "";
-  const W = 640, H = 230, PL = 46, PR = 14, PT = 16, PB = 30;
-  const iw = W - PL - PR, ih = H - PT - PB;
-  const max = Math.max(...vv, 0), min = Math.min(...vv, 0);
-  const span = (max - min) || Math.abs(max) || 1;
-  const y = v => PT + ih - ((v - min) / span) * ih;
-  const head = `<text x="${PL}" y="11" fill="${TXT}" font-size="10">${esc(columns[vi])}</text>`;
-  const axis = `<line x1="${PL}" y1="${PT + ih}" x2="${W - PR}" y2="${PT + ih}" stroke="${AXIS}"/>` +
-    `<text x="4" y="${PT + 4}" fill="${TXT}" font-size="9">${esc(max.toFixed(1))}</text>` +
-    `<text x="4" y="${PT + ih}" fill="${TXT}" font-size="9">${esc(min.toFixed(1))}</text>`;
+    async function loadStatus() {
+      const st = await api('/api/status');
+      s.status = st;
+      if (!st) {
+        s.online = false;
+        return;
+      }
+      s.online = true;
+    }
 
-  if (kind === "pie") {
-    const total = vv.reduce((s, v) => s + Math.abs(v), 0) || 1;
-    const cx = 140, cy = H / 2, r = 82;
-    let a0 = -Math.PI / 2, i = 0;
-    const slices = pts.slice(0, 8).map(p => {
-      const a1 = a0 + Math.abs(p.v) / total * Math.PI * 2;
-      const x1 = cx + r * Math.cos(a0), y1 = cy + r * Math.sin(a0);
-      const x2 = cx + r * Math.cos(a1), y2 = cy + r * Math.sin(a1);
-      const big = a1 - a0 > Math.PI ? 1 : 0;
-      const d = `M${cx} ${cy} L${x1.toFixed(1)} ${y1.toFixed(1)} A${r} ${r} 0 ${big} 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z`;
-      const color = ["#8b5cf6", "#22d3ee", "#f59e0b", "#34d399", "#f472b6", "#60a5fa", "#a78bfa", "#fbbf24"][i % 8];
-      a0 = a1; i++;
-      return `<path d="${d}" fill="${color}" opacity=".85"/>`;
-    }).join("");
-    const legend = pts.slice(0, 8).map((p, i) =>
-      `<rect x="270" y="${44 + i * 20}" width="10" height="10" rx="2" fill="${["#8b5cf6", "#22d3ee", "#f59e0b", "#34d399", "#f472b6", "#60a5fa", "#a78bfa", "#fbbf24"][i % 8]}"/>` +
-      `<text x="288" y="${53 + i * 20}" fill="${TXT}" font-size="11">${esc(p.label)}　${esc(p.v)}</text>`).join("");
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${slices}${legend}</svg>`;
-  }
+    async function loadChanges() {
+      const c = await api('/api/changes');
+      s.changes = c
+        ? ['标签：\n' + c.tags, '提交历史：\n' + c.log,
+           (c.diff_label || '版本变更') + '：\n' + c.diff_prev,
+           '工作区状态：\n' + (c.status || '(干净)')].join('\n\n')
+        : '（启动服务后这里显示 git 提交、标签与 diff --stat）';
+    }
 
-  if (kind === "line") {
-    const bw = iw / Math.max(pts.length - 1, 1);
-    const d = pts.map((p, i) => `${i ? "L" : "M"}${(PL + i * bw).toFixed(1)} ${y(p.v).toFixed(1)}`).join(" ");
-    const dots = pts.map((p, i) => `<circle cx="${(PL + i * bw).toFixed(1)}" cy="${y(p.v).toFixed(1)}" r="2.2" fill="${C_LINE}"/>`).join("");
-    const ticks = pts.map((p, i) => (pts.length <= 12 || i % Math.ceil(pts.length / 8) === 0)
-      ? `<text x="${(PL + i * bw).toFixed(1)}" y="${H - 10}" fill="${TXT}" font-size="9" text-anchor="middle">${esc(p.label)}</text>` : "").join("");
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${head}${axis}` +
-      `<path d="${d}" fill="none" stroke="${C_LINE}" stroke-width="2"/>${dots}${ticks}</svg>`;
-  }
+    /* ── 会话：localStorage，纯前端，不进服务端也不进仓库 ───────── */
+    function loadSessions() {
+      try {
+        const raw = JSON.parse(localStorage.getItem(STORE_KEY) || '[]');
+        s.sessions = Array.isArray(raw) ? raw : [];
+      } catch (e) { s.sessions = []; }
+    }
+    function saveSessions() {
+      try { localStorage.setItem(STORE_KEY, JSON.stringify(s.sessions.slice(0, 30))); } catch (e) {}
+    }
+    function newSession() {
+      s.currentId = null;
+      s.messages = [];
+      s.input = '';
+    }
+    function openSession(id) {
+      const target = s.sessions.find(x => x.id === id);
+      if (!target) return;
+      s.currentId = id;
+      s.messages = target.messages || [];
+      nextTick(scrollBottom);
+    }
+    function delSession(id) {
+      s.sessions = s.sessions.filter(x => x.id !== id);
+      if (s.currentId === id) newSession();
+      saveSessions();
+    }
+    function ensureSession(text) {
+      if (s.currentId) {
+        const cur = s.sessions.find(x => x.id === s.currentId);
+        if (cur && !cur.messages.length) { cur.title = text.slice(0, 18); }
+      } else {
+        const id = 's' + Date.now();
+        s.sessions.unshift({ id, title: text.slice(0, 18) || '新对话', time: now(), messages: [] });
+        s.currentId = id;
+      }
+      saveSessions();
+    }
+    function persist() {
+      const cur = s.sessions.find(x => x.id === s.currentId);
+      if (cur) { cur.messages = s.messages; cur.time = now(); saveSessions(); }
+    }
 
-  // bar：柱子多时换成横向条形，避免标签重叠
-  const horiz = pts.length > 8;
-  if (horiz) {
-    const rowH = ih / pts.length;
-    const bars = pts.map((p, i) => {
-      const w = Math.max(2, (Math.abs(p.v) / (Math.abs(max) || 1)) * (iw - 90));
-      return `<rect x="${PL + 78}" y="${(PT + i * rowH + rowH * 0.18).toFixed(1)}" width="${w.toFixed(1)}" height="${(rowH * 0.62).toFixed(1)}" rx="2" fill="${C_BAR}" opacity=".85"/>` +
-        `<text x="${PL + 74}" y="${(PT + i * rowH + rowH * 0.6).toFixed(1)}" fill="${TXT}" font-size="10" text-anchor="end">${esc(p.label)}</text>` +
-        `<text x="${(PL + 82 + w).toFixed(1)}" y="${(PT + i * rowH + rowH * 0.6).toFixed(1)}" fill="${TXT}" font-size="9">${esc(p.v)}</text>`;
-    }).join("");
-    return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${head}${bars}</svg>`;
-  }
-  const bw = iw / pts.length;
-  const bars = pts.map((p, i) => {
-    const top = p.v >= 0 ? y(p.v) : y(0);
-    const hgt = Math.max(1, Math.abs(y(p.v) - y(0)));
-    return `<rect x="${(PL + i * bw + bw * 0.18).toFixed(1)}" y="${top.toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${hgt.toFixed(1)}" rx="2" fill="${C_BAR}" opacity=".85"/>` +
-      `<text x="${(PL + i * bw + bw / 2).toFixed(1)}" y="${H - 10}" fill="${TXT}" font-size="9" text-anchor="middle">${esc(p.label)}</text>` +
-      `<text x="${(PL + i * bw + bw / 2).toFixed(1)}" y="${(top - 4).toFixed(1)}" fill="${TXT}" font-size="9" text-anchor="middle">${esc(p.v)}</text>`;
-  }).join("");
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${head}${axis}${bars}</svg>`;
-}
+    function scrollBottom() {
+      nextTick(() => {
+        const el = threadEl.value;
+        if (el) el.scrollTop = el.scrollHeight;
+      });
+    }
 
-function resultHtml(res, offline) {
-  if (!res) return `<div class="err">服务未响应。</div>`;
-  if (res.error && !res.sql && !res.rows) return `<div class="err">${esc(res.error)}</div>`;
-  let h = "";
-  if (offline) h += `<div class="pill">离线快照 · 预录的真实运行结果</div>`;
-  h += `<div class="meta">模式 ${esc(res.mode || "-")} · 步数 ${res.steps ?? "-"} · ` +
-       `耗时 ${Number(res.elapsed_ms || 0).toFixed(1)} ms · ` +
-       `估算成本 ${res.estimated_cost_yuan ?? "-"} 元` +
-       (res.fallback_used ? " · 已触发兜底" : "") + "</div>";
-  h += `<div class="answer">`;
-  if (res.denied) h += `<span class="badge-inline danger">安全拦截</span>`;
-  // 意图闸门：明确告诉用户「没有查库」，避免把说明文字误当成查询结果
-  if (res.mode === "gate") h += `<span class="badge-inline ok">未查库 · 意图闸门</span>`;
-  h += esc(res.conclusion || "(无结论)") + `</div>`;
-  if (res.sql) h += `<details open><summary>生成的 SQL（可核对）</summary><pre>${esc(res.sql)}</pre></details>`;
-  if (res.denied && res.error) h += `<p class="err" style="margin-top:8px">${esc(res.error)}</p>`;
-  else if (res.error) h += `<p class="err" style="margin-top:8px">执行失败：${esc(res.error)}</p>`;
-  if (res.rows && res.rows.length) {
-    // 先图后表：图给直观印象，表给精确数字，两者都要，缺一不可核对
-    const chart = svgChart(res.chart, res.columns || [], res.rows);
-    if (chart) h += `<details open><summary>结果图表 · ${esc(res.chart)}</summary><div class="chart-box">${chart}</div></details>`;
-    h += `<details open><summary>结果表格 · ${res.rows.length} 行</summary><div class="tbl-wrap"><table><tr>` +
-         (res.columns || []).map(c => `<th>${esc(c)}</th>`).join("") + "</tr>" +
-         res.rows.slice(0, 12).map(r => "<tr>" + r.map(v => `<td>${esc(v)}</td>`).join("") + "</tr>").join("") +
-         "</table></div>" +
-         (res.rows.length > 12 ? `<p class="muted">仅显示前 12 行，共 ${res.rows.length} 行</p>` : "") +
-         `</details>`;
-  }
-  if (res.trace && res.trace.length) {
-    h += `<details><summary>执行轨迹 · ${res.trace.length} 步</summary><div class="tbl-wrap"><table>` +
-         `<tr><th>步</th><th>动作</th><th>摘要</th></tr>` +
-         res.trace.map(t => `<tr><td>${t.step}</td><td>${esc(t.action)}</td><td>${esc(t.result_summary)}</td></tr>`).join("") +
-         `</table></div></details>`;
-  }
-  return h;
-}
-function renderThread() {
-  const has = messages.length > 0;
-  $("hero").classList.toggle("hidden", has);
-  $("thread").classList.toggle("hidden", !has);
-  // 同一个 composer 节点在两个容器间移动，监听器仍绑定在节点上
-  (has ? $("dockSlot") : $("heroSlot")).appendChild($("composer"));
-  $("threadInner").innerHTML = messages.map(m =>
-    `<div class="msg you"><div class="av">W</div><div class="bubble">${esc(m.q)}</div></div>` +
-    `<div class="msg ai"><div class="av">✦</div><div class="bubble">${resultHtml(m.res, m.offline)}</div></div>`
-  ).join("");
-  const t = $("thread"); t.scrollTop = t.scrollHeight;
-}
+    /* ── 提问 ───────────────────────────────────────────────── */
+    async function ask() {
+      const q = s.input.trim();
+      if (!q || s.busy) return;
+      s.input = '';
+      s.busy = true;
+      ensureSession(q);
+      s.messages.push({ role: 'you', text: q });
+      const idx = s.messages.length;
+      s.messages.push({ role: 'ai', pending: true });
+      scrollBottom();
 
-/* ── 提问：在线优先，离线回退到内嵌快照 ───────────────────────── */
-let busy = false;
-async function ask(qText) {
-  const q = (qText !== undefined ? qText : $("q").value).trim();
-  if (!q || busy) return;
-  busy = true; $("askBtn").disabled = true;
-  if (!currentId) newSession();
-  const cur = sessions.find(x => x.id === currentId);
-  if (cur && !messages.length) cur.title = q.length > 16 ? q.slice(0, 16) + "…" : q;
-  messages.push({q, res: {mode: "…", conclusion: "分析中…", steps: 0, elapsed_ms: 0, estimated_cost_yuan: "-"}});
-  renderThread();
+      let result = null;
+      if (s.online) {
+        result = await api('/api/ask?q=' + encodeURIComponent(q) + '&mode=' + s.mode);
+      }
+      // 离线 / 请求失败 → 用快照兜底，页面不至于空着
+      if (!result && SNAPSHOTS[q]) result = SNAPSHOTS[q];
+      if (!result) {
+        result = { conclusion: s.online
+          ? '请求失败：服务可能已停止，请检查终端。'
+          : '当前是静态快照模式（未连接后端），这个问题没有预录结果。启动 python scripts/api.py 后可查询任意问题。',
+          columns: [], rows: [], sql: '', trace: [], mode: 'offline',
+          steps: 0, elapsed_ms: 0, estimated_cost_yuan: 0 };
+      }
+      s.messages[idx] = { role: 'ai', result };
+      s.busy = false;
+      persist();
+      scrollBottom();
+    }
+    function quickAsk(q) { s.input = q; ask(); }
 
-  const mode = $("mode").value;
-  let res = await api("/api/ask?q=" + encodeURIComponent(q) + "&mode=" + mode);
-  let offline = false;
-  if (!res) {
-    const snap = SNAPSHOTS[q];
-    if (snap) { res = snap; offline = true; }
-    else res = {error: "服务未启动，且该问题没有离线快照。请运行 python scripts/serve.py 后重试。"};
-  }
-  messages[messages.length - 1] = {q, res, offline};
-  $("q").value = "";
-  renderThread(); commitSession();
-  busy = false; $("askBtn").disabled = false;
-}
+    /* ── 工作台动作 ─────────────────────────────────────────── */
+    async function runEval() {
+      s.busyEval = true; s.evalOut = '运行中…';
+      const r = await api('/api/eval');
+      s.evalOut = r ? JSON.stringify(r, null, 2) : '（服务未启动）';
+      s.busyEval = false;
+    }
+    async function runAblation() {
+      s.busyAbl = true; s.evalOut = '跑五组消融，约需数分钟…';
+      const r = await api('/api/ablation');
+      s.evalOut = r ? JSON.stringify(r, null, 2) : '（服务未启动）';
+      s.busyAbl = false;
+    }
+    async function copy(text) {
+      try { await navigator.clipboard.writeText(text); } catch (e) {}
+      s.copied = text;
+      setTimeout(() => { if (s.copied === text) s.copied = ''; }, 1500);
+    }
 
-/* ── 交互绑定 ───────────────────────────────────────────────── */
-$("quick").innerHTML = QUICK.map(q => `<button data-q="${esc(q)}">${esc(q)}</button>`).join("");
-document.querySelectorAll("button[data-q]").forEach(b => b.onclick = () => {
-  if (b.dataset.q.includes("为什么")) $("mode").value = "agent";
-  else $("mode").value = "auto";
-  ask(b.dataset.q);
-  closeDrawer();
-});
-$("plusBtn").onclick = () => { $("q").value = QUICK[Math.floor(Math.random() * QUICK.length)]; $("q").focus(); };
-$("settingsBtn").onclick = () => openDrawer();
-$("askBtn").onclick = () => ask();
-$("q").addEventListener("keydown", e => {
-  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); ask(); }
-});
-$("newChat").onclick = () => { newSession(); $("q").focus(); closeDrawer(); };
-$("searchBtn").onclick = () => $("search").classList.toggle("hidden");
-$("search").addEventListener("input", e => renderSessions(e.target.value));
-$("railToggle").onclick = () => $("sidebar").classList.toggle("collapsed");
-$("railHelp").onclick = () => { openDrawer(); $("drawer").scrollTop = $("drawer").scrollHeight; };
+    /* ── 派生状态 ───────────────────────────────────────────── */
+    const filteredSessions = computed(() => {
+      const f = s.search.trim();
+      return f ? s.sessions.filter(x => (x.title || '').includes(f)) : s.sessions;
+    });
+    const statusText = computed(() => {
+      if (!s.status) return '静态快照（未启动服务）· 示例问题可离线查看';
+      const st = s.status;
+      return `数据库 ${st.db_backend} · ${st.sensor_rows} 行监测数据 · ` +
+             `冒烟 ${st.cases_smoke} / 正式 ${st.cases_full} 条 · ${st.reports.length} 份报告`;
+    });
+    const onlineTip = computed(() => s.online ? '实时模式 · 任意问题都会查库' : '离线快照模式：示例问题可查看预录结果');
+    const dbBadge = computed(() => s.status ? (s.status.db_backend === 'mysql' ? 'MySQL' : 'SQLite') : 'SQLite');
+    const dbTitle = computed(() => s.status && s.status.mysql_sensor_rows !== null
+      ? `MySQL 中 ${s.status.mysql_sensor_rows} 行` : '数据库后端');
 
-function openDrawer() { $("drawer").classList.add("open"); $("mask").classList.add("show"); }
-function closeDrawer() { $("drawer").classList.remove("open"); $("mask").classList.remove("show"); }
-$("openWorkbench").onclick = openDrawer;
-$("closeDrawer").onclick = closeDrawer;
-$("mask").onclick = closeDrawer;
-document.querySelectorAll(".rail-ic[data-panel]").forEach(b => b.onclick = () => {
-  document.querySelectorAll(".rail-ic[data-panel]").forEach(x => x.classList.remove("active"));
-  b.classList.add("active");
-  if (b.dataset.panel === "workbench" || b.dataset.panel === "data") {
-    openDrawer();
-    const target = b.dataset.panel === "data" ? $("dataSection") : null;
-    if (target) $("drawer").scrollTop = target.offsetTop - 20;
-  } else closeDrawer();
-});
-document.addEventListener("keydown", e => {
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); $("q").focus(); }
-  if (e.key === "Escape") closeDrawer();
-});
+    /* ── 快捷键 ─────────────────────────────────────────────── */
+    function onKey(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const ta = document.querySelector('.composer textarea');
+        if (ta) ta.focus();
+      }
+    }
 
-$("evalBtn").onclick = async () => {
-  const out = $("evalOut"); out.classList.remove("hidden"); out.textContent = "正在跑 15 条冒烟集…";
-  const s = await api("/api/eval");
-  out.textContent = s ? JSON.stringify(s, null, 2) : "服务未启动";
-};
-$("ablBtn").onclick = async () => {
-  const out = $("evalOut"); out.classList.remove("hidden"); out.textContent = "正在跑五组消融…";
-  const a = await api("/api/ablation");
-  out.textContent = a
-    ? Object.entries(a.configs).map(([k, v]) =>
-        `${k.padEnd(20)} ${(v.accuracy * 100).toFixed(1)}%  Δ ${(a.delta_vs_full[k]?.overall_pp ?? 0).toFixed(2)}pp  上下文 ${v.schema_context_chars} 字符`
-      ).join("\n") + "\n\n" + a.interpretation
-    : "服务未启动";
-};
+    /* ── 初始化 ─────────────────────────────────────────────── */
+    loadSessions();
+    loadChanges();
+    window.addEventListener('keydown', onKey);
+    // 恢复上次未结束的会话内容（只恢复消息，不自动发请求）
+    if (s.sessions.length) { s.currentId = s.sessions[0].id; s.messages = s.sessions[0].messages || []; }
 
-/* 启动：会话列表 → 布局 → 状态与代码变化 */
-loadSessions();
-newSession();
-loadChanges();
-loadStatus().then(() => {
-  if (location.search.includes("q=") && online) {
-    $("q").value = new URLSearchParams(location.search).get("q");
-    ask();
-  }
-});
+    // 深链：/ ?q=某个问题 打开即自动提问。
+    // 用途有两个：① 演示时可以直接收藏一条链接，不用现场打字；
+    // ② 自动化截图验证（无头浏览器只加载页面、点不了按钮，靠这个参数
+    //    才能把「回答 + 图表」的渲染结果截下来检查）。
+    (async () => {
+      await loadStatus();
+      const pre = new URLSearchParams(location.search).get('q');
+      if (pre) { s.input = pre; await ask(); }
+    })();
+
+    return {
+      // toRefs 而不是直接展开 reactive：展开会拿到「当时的值」，
+      // v-model 写回去的是普通属性，视图不会更新。toRefs 把每个字段
+      // 变成 ref，模板里自动解包，双向绑定才成立。
+      ...toRefs(s), threadEl,
+      filteredSessions, statusText, onlineTip, dbBadge, dbTitle,
+      ask, quickAsk, newSession, openSession, delSession, runEval, runAblation, copy,
+    };
+  },
+}).mount('#app');
 </script>
 </body>
 </html>

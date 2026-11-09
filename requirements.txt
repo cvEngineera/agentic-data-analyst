@@ -1,17 +1,36 @@
-# 基线必需（已验证可安装）
-sqlglot>=27,<31
-python-dotenv>=1.0
-
-# 可选增强：装上后自动启用，不装也能跑完整基线
-# 真实模型调用
-openai>=1.40
-# 结构化输出校验（代码内有标准库降级实现）
-pydantic>=2.8
-# 评估统计与图表
-pandas>=2.2
-matplotlib>=3.8
-# 交互界面
-streamlit>=1.38
-
-# 说明：基线链路只依赖 Python 标准库 + sqlglot。
+# 依赖清单（v0.12：与申报表技术栈对齐）
+#
+# 分三档，按用途装，不要把「跑评估」和「跑界面」的依赖混在一起：
+#   1) 核心链路：只装第 1 节即可跑 CLI 与 144 条评估（纯标准库 + sqlglot）
+#   2) 服务与数据层：要开网页 / 连 MySQL 时再装第 2 节
+#   3) 可选增强：LangChain 与 pgvector，装不上会自动降级，不影响主链路
+#
 # 完整安装：pip install -r requirements.txt
+
+# ── 1) 核心链路（必需）────────────────────────────────────────────
+# SQL 语法树校验：validator 的表/字段白名单依赖它，缺失时会退化为只做
+# 安全层检查（能跑，但「字段不存在」这类错误要等数据库报错才发现）
+sqlglot>=27,<31
+
+# ── 2) 服务与数据层 ──────────────────────────────────────────────
+# FastAPI 服务（scripts/api.py）+ ASGI 服务器
+fastapi>=0.110
+uvicorn[standard]>=0.30
+# SQLAlchemy 2.x：ORM 模型、Inspector 反射、连接池
+sqlalchemy>=2.0
+# MySQL 驱动。pymysql 是纯 Python 实现，装不上编译器的环境也能用；
+# cryptography 是 MySQL 8 默认 caching_sha2_password 认证所必需的
+pymysql>=1.1
+cryptography>=42
+
+# ── 3) 可选增强（装不上会自动降级）────────────────────────────────
+# LangChain 通道：缺失时 sql/generator.py 自动回落到标准库 urllib 实现
+langchain-openai>=0.2
+langchain-core>=0.3
+# pgvector：缺失或连不上 PG 时，vector_store 退回内存向量计算
+pgvector>=0.2
+psycopg[binary]>=3.1
+
+# 说明：数据可视化走浏览器端的 ECharts（src/web/vendor），
+# 不需要 matplotlib / pandas；界面也不依赖 streamlit。
+# 早期版本曾把这两个列为可选，实际从未在代码里 import，已删除以免误导。

@@ -113,6 +113,15 @@ def evaluate(cases: list[dict]) -> tuple[list[dict], dict]:
     total_steps = 0
     total_cost = 0.0
 
+    # ---- 评估口径钉死 SQLite（v0.12）------------------------------------
+    # 起因：v0.12 起演示链路可以切到 MySQL（DB_BACKEND=mysql），但 144 条
+    # 用例的 expected_sql 全是 SQLite 方言（strftime / datetime('now','-1 day')），
+    # 在 MySQL 上会整片语法错误，准确率会从 64.6% 掉到个位数——那不是模型退化，
+    # 是量错了对象。所以评估入口强制把后端切回 sqlite，跑完恢复。
+    # 这也解释了论文里那句「评估环境冻结 SQLite，MySQL 只承担部署」。
+    saved_backend = settings.db_backend
+    settings.db_backend = "sqlite"
+
     # deny_sql 用例要直接考校验层，需要一份字段白名单；整轮只自省一次库，
     # 避免 104 条用例各连一次数据库把耗时统计污染掉。
     conn = connect(readonly=True)

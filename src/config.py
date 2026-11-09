@@ -87,6 +87,41 @@ class Settings:
     # 但接口一致，将来装得上向量库可直接替换 provider。
     enable_semantic_retrieval: bool = os.getenv("ENABLE_SEMANTIC_RETRIEVAL", "0") == "1"
 
+    # ---- 向量检索开关（v0.12，pgvector）---------------------------------
+    # 默认关闭的原因同上：v0.6~v0.11 的所有准确率数字都是
+    # 「关键词 + 数据字典 + 外键扩展」口径，切换召回方式会让数字不可比。
+    # 打开方式：ENABLE_VECTOR_RETRIEVAL=1，需先跑 scripts/setup_pgvector.py。
+    # 打开后 hybrid_score() 会叠加 pgvector 的余弦相似度（连不上则自动
+    # 退回内存向量，功能不中断，来源会写进执行轨迹）。
+    enable_vector_retrieval: bool = os.getenv("ENABLE_VECTOR_RETRIEVAL", "0") == "1"
+
+    # ---- 数据后端（v0.12，对齐申报表「MySQL + SQLAlchemy」）--------------
+    # sqlite：默认值。评估数字（144 条 / 64.6%±0.7%）是在 data/db/bishe.db
+    #         上冻结的，评估脚本会显式钉死 sqlite，保证换机器也复现同一结果。
+    # mysql ：演示与部署后端，数据由 scripts/setup_mysql.py 从 sqlite 迁入。
+    # 切换方式：.env 里写 DB_BACKEND=mysql，或命令行临时覆盖。
+    db_backend: str = os.getenv("DB_BACKEND", "sqlite")
+    # MYSQL_URL 优先级最高：给了它就用它，忽略下面五个分项
+    # （密码里有 @ / # 这类字符时，直接写完整 URL 比拆分项省事）。
+    mysql_url: str = os.getenv("MYSQL_URL", "")
+    mysql_host: str = os.getenv("MYSQL_HOST", "127.0.0.1")
+    mysql_port: int = int(os.getenv("MYSQL_PORT", "3306"))
+    mysql_user: str = os.getenv("MYSQL_USER", "root")
+    mysql_password: str = os.getenv("MYSQL_PASSWORD", "")
+    mysql_database: str = os.getenv("MYSQL_DATABASE", "bishe")
+
+    # ---- 模型调用后端（v0.12，对齐申报表「LangChain」）--------------------
+    # langchain：走 langchain_openai.ChatOpenAI（申报表指定的方式）
+    # urllib   ：v0.5 起用的标准库直连实现，作为备用通道
+    # 两者调的是同一个 OpenAI 兼容接口，出问题可一键切回，不影响实验口径。
+    llm_backend: str = os.getenv("LLM_BACKEND", "langchain")
+
+    # ---- 向量检索（v0.12，对齐申报表「pgvector」）-------------------------
+    # 有 PG 实例就指向它；没有时自动降级为本地向量文件，
+    # 降级不影响主链路，只影响「Schema 检索」的召回方式。
+    pgvector_url: str = os.getenv(
+        "PGVECTOR_URL", "postgresql://postgres:postgres@127.0.0.1:5433/bishe_vec")
+
     # ---- 消融实验开关 ---------------------------------------------------
     # 三个开关默认全开（即完整方案）。ablation.py 会在每组实验前临时改写
     # settings 实例，跑完恢复，保证「逐层独立开关」这一论文要求可落地。

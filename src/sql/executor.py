@@ -60,29 +60,20 @@ def execute(sql: str, params: tuple = ()) -> tuple[list[str], list[tuple], str, 
         出错时前两项为空、第三项为错误信息；**不抛异常**，
         因为错误信息要被回喂给生成层，抛出去就断了重试链路。
 
-    超时实现：SQLite 没有直接的语句超时参数，用 set_progress_handler
-    每 1000 条 VM 指令回调一次，超过 settings.query_timeout 返回非零中断执行。
-    这样一条失控的全表扫描不会把整个演示卡死。
+    实现位置（v0.12 变化）：
+        具体的执行与超时控制搬到了 ``db/query.py``，因为现在有 SQLite 与
+        MySQL 两个后端，差异（只读手段、超时手段、占位符风格）收在一个
+        文件里更好维护。本函数只保留「执行一次、不重试」这一层语义，
+        调用方与返回值完全不变，评估脚本无需改动。
+
+        分工：
+            SQLite → mode=ro + query_only + set_progress_handler 看门狗
+            MySQL  → SESSION TRANSACTION READ ONLY + max_execution_time
+        两者都是数据库层面的兜底，不依赖「SQL 字符串里有没有 DELETE」。
     """
-    conn = connect(readonly=True)
-    t0 = time.perf_counter()
-    try:
-        deadline = settings.query_timeout
+    from ..db.query import run_sql
 
-        def _watchdog() -> int:
-            """返回非 0 会让 SQLite 中断当前语句。"""
-            return 1 if time.perf_counter() - t0 > deadline else 0
-
-        conn.set_progress_handler(_watchdog, 1000)
-        cur = conn.execute(sql, params)
-        cols = [d[0] for d in cur.description] if cur.description else []
-        # fetchmany 而不是 fetchall：双重保险，防止 LIMIT 被绕过时撑爆内存
-        rows = [tuple(r) for r in cur.fetchmany(settings.row_limit)]
-        return cols, rows, "", (time.perf_counter() - t0) * 1000
-    except Exception as exc:
-        return [], [], str(exc), (time.perf_counter() - t0) * 1000
-    finally:
-        conn.close()
+    return run_sql(sql, params)
 
 
 def run_with_retry(question: str, schema_context: str,

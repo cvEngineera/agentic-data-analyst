@@ -37,86 +37,25 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))  # 让任意工作目录下都能 import src.*
 
 from src.agent.runtime import run  # noqa: E402
-from src.config import DB_PATH, REPORT_DIR, settings  # noqa: E402
-from src.db.core import connect  # noqa: E402
+from src.config import DB_PATH, settings  # noqa: E402
 from src.evaluation.ablation import run_ablation  # noqa: E402
 from src.evaluation.runner import evaluate, load_cases  # noqa: E402
+from src.version import VERSION  # noqa: E402
+# v0.12：状态与版本信息的实现抽到 src/web/payloads.py，
+# FastAPI 版本（scripts/api.py）复用同一份，避免两个服务显示不一致。
+from src.web.payloads import changes_payload, status_payload  # noqa: E402
 
 WEB_DIR = ROOT / "src" / "web"
-VERSION = "v0.11"
-
-
-def _git_text(args: list[str]) -> str:
-    """在项目目录执行只读 git 命令，把输出作为文本返回。
-
-    只用于展示，不修改仓库；任何异常都返回说明文字而不是抛错，
-    避免页面因为 git 没配置好就整块崩掉。
-    """
-    try:
-        out = subprocess.run(
-            ["git", "-C", str(ROOT), *args],
-            capture_output=True, text=True, encoding="utf-8", timeout=10,
-        )
-        return (out.stdout or out.stderr).strip() or "(无输出)"
-    except Exception as exc:
-        return f"(git 不可用: {type(exc).__name__})"
 
 
 def _status() -> dict:
-    """汇总当前版本状态，供页面顶部状态栏显示。
-
-    v0.4 起额外返回数据源元信息（synthetic / uci）。页面要让人一眼看出
-    当前跑的是可复现合成数据还是 UCI 公开真实数据，避免把两种口径的
-    评估数字混着看——这是数据接入适配器落地后必须补上的一处可解释性。
-    """
-    # 局部导入：启动服务时不触碰 uci_loader 的下载/解压相关代码
-    from src.db.uci_loader import read_meta
-    meta = read_meta()
-    rows = 0
-    if DB_PATH.exists():
-        conn = connect(readonly=True)
-        try:
-            rows = conn.execute("SELECT COUNT(*) FROM sensor_data").fetchone()[0]
-        finally:
-            conn.close()
-    reports = []
-    if REPORT_DIR.exists():
-        for p in sorted(REPORT_DIR.iterdir()):
-            if p.is_file() and p.suffix in (".json", ".jsonl"):
-                reports.append({"name": p.name, "size": p.stat().st_size})
-    return {
-        "version": VERSION,
-        "llm_mode": settings.llm_mode,
-        "db_exists": DB_PATH.exists(),
-        "sensor_rows": rows,
-        "data_source": meta.get("source", "synthetic"),
-        "dataset": meta.get("dataset", ""),
-        "data_note": meta.get("note", ""),
-        "cases_smoke": len(load_cases()),
-        "cases_full": len(load_cases(ROOT / "src" / "evaluation" / "cases_eval.jsonl"))
-        if (ROOT / "src" / "evaluation" / "cases_eval.jsonl").exists() else 0,
-        "reports": reports,
-    }
+    """兼容包装：老代码里仍叫 _status()，实现已移到 src.web.payloads。"""
+    return status_payload(VERSION)
 
 
 def _changes() -> dict:
-    """返回 git 版本历史与相对上一版的变更统计，页面用来展示「代码不断变化」。
-
-    diff 不写死版本号：按版本排序取最近两个 tag 自动对比，
-    这样以后每打一个新 tag，页面刷新就能看到最新一步改了什么。
-    """
-    tags_text = _git_text(["tag", "-l", "--sort=-v:refname"])
-    tags = [t.strip() for t in tags_text.splitlines() if t.strip()]
-    cur, prev = (tags[0] if tags else "HEAD"), (tags[1] if len(tags) > 1 else "")
-    diff = (_git_text(["diff", prev, cur, "--stat"])
-            if prev else "(只有一个版本，暂无可对比的 diff)")
-    return {
-        "tags": tags_text,
-        "log": _git_text(["log", "--oneline", "--decorate", "-10"]),
-        "diff_label": f"{prev} → {cur} 变更" if prev else "版本变更",
-        "diff_prev": diff,
-        "status": _git_text(["status", "--short"]),
-    }
+    """兼容包装：实现已移到 src.web.payloads。"""
+    return changes_payload()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -142,6 +81,19 @@ class Handler(BaseHTTPRequestHandler):
             if path in ("/", "/index.html"):
                 html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
                 self._send(html, ctype="text/html; charset=utf-8")
+            elif path.startswith("/vendor/"):
+                # v0.12：前端改用 Vue 3 + ECharts，两个 js 放在 src/web/vendor。
+                # 标准库版服务也要能把它们发出去，否则页面白屏。
+                # 这里只允许读取 vendor 目录内的文件，并用 resolve() 校验，
+                # 防止 ../../ 这类路径穿越读到仓库外的文件。
+                base = (WEB_DIR / "vendor").resolve()
+                target = (base / path[len("/vendor/"):]).resolve()
+                if not str(target).startswith(str(base)) or not target.is_file():
+                    self._send({"error": "not found"}, status=404)
+                    return
+                ctype = ("application/javascript; charset=utf-8"
+                         if target.suffix == ".js" else "application/octet-stream")
+                self._send(target.read_bytes(), ctype=ctype)
             elif path == "/api/status":
                 self._send(_status())
             elif path == "/api/ask":

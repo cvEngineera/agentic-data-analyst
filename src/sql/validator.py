@@ -60,6 +60,21 @@ def _strip_sql(sql: str) -> str:
     return s.strip().rstrip(";").strip()
 
 
+def _read_dialect() -> str:
+    """当前校验应使用的 SQL 方言（v0.12）。
+
+    为什么需要它：v0.12 起支持 MySQL 作为演示后端，而 sqlglot 的
+    ``parse_one(read=...)`` 必须给对方言，否则 ``DATE_SUB(CURDATE(),
+    INTERVAL 1 DAY)`` 这类 MySQL 写法会被 SQLite 方言解析失败，
+    正确的 SQL 被判成语法错误。
+
+    取值跟随 ``settings.db_backend``：
+        sqlite → "sqlite"（默认，评估口径）
+        mysql  → "mysql"
+    """
+    return "mysql" if settings.db_backend == "mysql" else "sqlite"
+
+
 def validate(sql: str, schema_info: dict[str, list[str]]) -> ValidationResult:
     """执行四关校验。
 
@@ -98,7 +113,7 @@ def validate(sql: str, schema_info: dict[str, list[str]]) -> ValidationResult:
     try:
         import sqlglot
         from sqlglot import exp
-        tree = sqlglot.parse_one(body, read="sqlite")  # 指定方言，保证日期函数解析正确
+        tree = sqlglot.parse_one(body, read=_read_dialect())  # 指定方言，保证日期函数解析正确
         if tree is None:
             raise ValueError("parse returned None")
         tables = [t.name for t in tree.find_all(exp.Table)]
