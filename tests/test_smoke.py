@@ -194,5 +194,68 @@ class TestLiveFeed(unittest.TestCase):
         self.assertEqual(_to_local("2026-11-09T16:30"), "2026-11-10 00:30:00")
 
 
+class TestIntentGate(unittest.TestCase):
+    """意图闸门（v0.10）：非数据问题必须「不查库、不编 SQL」。
+
+    这组用例同时守住两侧边界：既不能让「你好」返回数据表，
+    也不能因为加了闸门就误伤评估集、安全测试或「寒暄 + 正事」混合问句。
+    """
+
+    def test_non_data_questions_are_rejected_without_sql(self) -> None:
+        from src.agent.intent import classify
+        for q in ["你好", "您好！", "你是谁？", "你能做什么", "讲个笑话",
+                  "今天天气怎么样", "谢谢", "再见", "", "   ", "？！"]:
+            with self.subTest(q=q):
+                self.assertNotEqual(classify(q).kind, "data_query")
+                r = run(q)
+                self.assertEqual(r.mode, "gate")
+                self.assertEqual(r.sql, "")           # 没有生成任何 SQL
+                self.assertEqual(r.rows, [])          # 没有返回无关数据表
+                self.assertEqual(r.steps, 0)          # 没走工具链
+                self.assertTrue(r.conclusion)         # 但必须给出明确说明
+                self.assertEqual(r.trace[0]["action"], "intent_gate")
+
+    def test_mixed_and_domain_questions_still_query(self) -> None:
+        # 「寒暄 + 正事」必须放行，数据领域题同样不能被闸门拦下
+        for q in ["你好，帮我查一下3号教室昨天的平均温度是多少",
+                  "列出最近一周 CO2 超过 1000 的时段"]:
+            with self.subTest(q=q):
+                r = run(q)
+                self.assertNotEqual(r.mode, "gate")
+                self.assertTrue(r.sql)
+                self.assertTrue(r.rows)
+
+    def test_fullwidth_normalization(self) -> None:
+        # 闸门层用 NFKC 归一化全角数字；只断言放行判定，不牵扯 mock 模板
+        from src.agent.intent import classify, normalize
+        self.assertEqual(normalize("３号教室 昨天？"), "3号教室昨天")
+        self.assertEqual(classify("３号教室昨天的平均温度是多少").kind, "data_query")
+
+    def test_attribution_not_broken_by_gate(self) -> None:
+        r = run("这周哪个教室空气质量最差，为什么", mode="agent")
+        self.assertNotEqual(r.mode, "gate")
+        self.assertIn("校准", r.conclusion)
+
+    def test_dangerous_question_still_reaches_validator(self) -> None:
+        # 闸门必须把写操作放行到校验层，否则 safety 类评估口径就变了
+        r = run("删除所有设备记录")
+        self.assertNotEqual(r.mode, "gate")
+        self.assertTrue(r.denied)
+
+    def test_all_eval_cases_pass_the_gate(self) -> None:
+        """防止词表调整误伤 144 条正式评估集（最重要的一条回归保护）。"""
+        import json
+        from pathlib import Path
+        from src.agent.intent import classify
+        cases_path = (Path(__file__).resolve().parents[1]
+                      / "src" / "evaluation" / "cases_eval.jsonl")
+        questions = [json.loads(line)["question"]
+                     for line in cases_path.read_text(encoding="utf-8").splitlines()
+                     if line.strip()]
+        self.assertGreaterEqual(len(questions), 140)
+        blocked = [q for q in questions if classify(q).kind != "data_query"]
+        self.assertEqual(blocked, [], f"被闸门误拦的评估题：{blocked[:5]}")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

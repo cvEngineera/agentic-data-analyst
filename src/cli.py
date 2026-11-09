@@ -66,8 +66,12 @@ def main() -> None:
     else:
         print(f"\n结果\n{format_table(result.columns, result.rows)}")
     print(f"\n结论      {result.conclusion}")
-    print(f"耗时 {result.elapsed_ms:.1f} ms | 估算成本 {result.estimated_cost_yuan} 元 "
-          f"| 建议图表 {choose_chart(result.question, result.columns, result.rows)}")
+    # 意图闸门直接回复时没有任何结果集，不该再给「建议图表 table」——
+    # 那会让人误以为系统其实查了库。把统计与配图建议分开输出。
+    stats = f"耗时 {result.elapsed_ms:.1f} ms | 估算成本 {result.estimated_cost_yuan} 元"
+    if result.mode != "gate":
+        stats += f" | 建议图表 {choose_chart(result.question, result.columns, result.rows)}"
+    print(stats)
     if args.chart:
         # save_chart 未装 matplotlib 时返回空串，这里静默跳过即可
         path = save_chart(result.columns, result.rows,

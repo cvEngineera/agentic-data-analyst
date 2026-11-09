@@ -28,6 +28,7 @@ from ..db.core import connect, introspect
 from ..schema_retrieval.catalog import build_schema_context, retrieve
 from ..sql.executor import RunResult, execute, run_with_retry
 from ..sql.validator import validate
+from .intent import classify
 
 # 工具白名单：Agent 只能在这四个动作里做选择。
 # 保留常量是为了让「工具集固定且少」这件事在代码里可见、在答辩时可指。
@@ -125,13 +126,33 @@ def run(question: str, mode: str = "auto") -> AgentResult:
         AgentResult，含结论、结果集、SQL、轨迹与统计信息。
 
     执行顺序（与开题报告 5.2 技术路线一致，也是图上那五段链路）：
-        1. Schema 检索  2. 单轮取数  3. 追加查询归因  4. 结果解读
-        5. 收敛检查与兜底
+        0. 意图闸门  1. Schema 检索  2. 单轮取数  3. 追加查询归因
+        4. 结果解读  5. 收敛检查与兜底
 
     关键取舍：无论哪一步失败，都保证返回一个带结论的 AgentResult，
-    绝不抛异常中断。这是「最差情况下系统也有输出」的工程底线。
+    绝不抛异常中断。但「有输出」不等于「必须给一张数据表」——
+    非数据问题由意图闸门直接说明范围，不查库（v0.10）。
     """
     started = time.perf_counter()
+
+    # ---- 步骤 0：意图闸门（v0.10）--------------------------------------
+    # 在连接数据库之前判断「该不该用 SQL 回答」。此前任何输入都会落到
+    # generator.FALLBACK_SQL，问「你好」也会返回最近 10 条监测数据，
+    # 属于「查错了比查不到更糟」的失败模式。闸门不检索、不生成、不执行，
+    # 也不会触发模型调用，因此零延迟、零成本、结果确定。
+    #
+    # 轨迹里的 action=intent_gate 是**前置过滤器**，不是 Agent 工具，
+    # 故不属于 TOOLS 白名单，也不计入工具调用次数。
+    intent = classify(question)
+    if intent.kind != "data_query":
+        gated = AgentResult(question=question, mode="gate", conclusion=intent.reply)
+        gated.trace.append({
+            "step": 0, "action": "intent_gate", "params": {"kind": intent.kind},
+            "result_summary": "非数据查询，未进入 SQL 链路（未连接数据库）",
+            "elapsed_ms": 0.0, "sql": "",
+        })
+        gated.elapsed_ms = (time.perf_counter() - started) * 1000
+        return gated
 
     # 先自省真实库：候选表清单与字段白名单都从这里来，换数据集自动适配
     conn = connect(readonly=True)
