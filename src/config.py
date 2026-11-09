@@ -88,18 +88,16 @@ class Settings:
 
     @property
     def real_mode_available(self) -> bool:
-        """判断真实模型是否可用：必须同时有 Key 和 openai SDK。
+        """判断真实模型是否可用：只需配置了 API Key。
 
-        用 import 探测而不是直接抛异常，是为了让 CLI 在缺依赖时打印友好提示
-        并自动回落 mock，而不是让整个进程崩掉。
+        v0.5 起模型调用改用标准库 ``urllib`` 走 OpenAI 兼容协议，不再依赖
+        ``openai`` SDK。本机 pip 大包反复超时，把「能不能接真实模型」卡在
+        装包上不合理；少一个依赖也少一处供应链风险。
+
+        注意：这里只检查 Key 是否存在，**不发起任何网络请求**。是否真的
+        调用模型由 ``llm_mode`` 决定，默认是 mock（完全离线）。
         """
-        if not self.api_key:
-            return False
-        try:
-            import openai  # noqa: F401  （只探测是否可导入）
-        except ImportError:
-            return False
-        return True
+        return bool(self.api_key)
 
 
 # 全局单例：其余模块统一从这里读配置

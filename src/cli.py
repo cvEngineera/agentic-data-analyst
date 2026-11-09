@@ -44,7 +44,7 @@ def main() -> None:
     # 真实模型不可用时明确告知并回落，绝不悄悄用 mock 冒充真实结果
     if settings.llm_mode == "real" and not settings.real_mode_available:
         if not args.json:  # JSON 模式只输出纯 JSON，不能混入提示文本
-            print("[提示] 真实模型不可用（缺少 LLM_API_KEY 或未安装 openai SDK），"
+            print("[提示] 真实模型不可用（缺少 LLM_API_KEY），"
                   "本次自动回落到 mock 模式。")
         settings.llm_mode = "mock"
 

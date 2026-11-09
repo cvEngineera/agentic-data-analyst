@@ -12,6 +12,32 @@ Git 历史从 v0.2 开始记录（v0.1 时期还没建仓库，不伪造历史�
 
 ---
 
+## v0.5 · 2026-11-09 —— 真实模型零依赖接入与密钥防护
+
+**改动**：模型调用从 `openai` SDK 改为标准库 `urllib` 实现 OpenAI 兼容协议
+（`src/sql/generator.py::_real_generate`）；`config.real_mode_available` 不再
+要求 SDK 已安装；`.gitignore` 增加 `.env.*` 与 `!.env.example` 白名单；
+CLI 的回落提示与 README 第五节同步更新。
+
+**为什么**：本机 pip 大包反复超时，`openai` 一直装不上，「接真实模型」不该
+被卡在装包上。这个接口本质只是一次 ``POST /chat/completions``，标准库够用，
+也少一处供应链风险。换供应商仍只改 base_url / model / api_key 三项。
+
+**密钥安全**：`.env` 只存本地，被忽略且未跟踪；Key 只放在 Authorization
+请求头，只发往 `.env` 里配置的模型厂商域名；不写日志、不写报告、不写执行
+轨迹，异常只记录类型名。默认 `LLM_MODE=mock` 完全离线，只有显式指定 real
+才发起网络请求。用 `git grep` 与 `git diff --cached` 两次扫描确认历史与
+暂存区均无密钥。
+
+**验证**：配置读取确认「密钥已配置 / 真实模式可用 / 当前仍为 mock」；
+compileall OK、单测 12/12、冒烟 15/15、正式集 144 条 24.3%、回归门禁通过。
+**本轮未发起任何真实模型调用**，保持离线。
+
+**下一步**：确认允许联网调用后，以 `LLM_MODE=real` 重跑 144 条评估与消融，
+那时的准确率与 delta 才是论文第七章可用的数字。
+
+---
+
 ## v0.4.1 · 2026-11-09 —— 评估口径独立与评估集扩容
 
 **改动**：`scripts/build_eval_cases.py` 移除

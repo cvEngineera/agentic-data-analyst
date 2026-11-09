@@ -2,7 +2,7 @@
 
 毕业设计课题《基于大语言模型的物联网监测数据分析 Agent 系统设计与实现》的代码工程。
 
-**当前版本：v0.4.1（2026-11-09）** —— UCI 公开数据集接入、144 条独立标注评估集；七模块链路、逐层消融、回归门禁、浏览器演示全部可跑。
+**当前版本：v0.5（2026-11-09）** —— 真实模型零依赖接入（标准库实现 OpenAI 兼容协议）、密钥本地防护；UCI 数据源、144 条独立标注评估集、逐层消融与回归门禁齐备。
 
 > 代码已逐模块补齐详细注释：每个文件开头说明它在七模块架构中的位置与设计取舍，
 > 每个函数有参数/返回/副作用说明，关键分支（只读连接、危险语句不重试、外键一跳扩展、
@@ -177,22 +177,29 @@ python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl \
 
 ## 五、接真实大模型（测真实准确率的唯一途径）
 
+**v0.5 起不需要安装 `openai` SDK**：模型调用改用 Python 标准库 `urllib`
+实现 OpenAI 兼容协议，零第三方依赖即可接真实模型（本机 pip 大包反复超时，
+不该把「能不能接模型」卡在装包上）。
+
 ```bash
-cp .env.example .env
-# 编辑 .env：LLM_MODE=real / LLM_API_KEY=sk-... /
-#           LLM_BASE_URL=https://api.deepseek.com / LLM_MODEL=deepseek-chat
-pip install -r requirements.txt     # 至少要装 openai
-python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl \
+# .env 只保存在本地，已被 .gitignore 忽略；确认 LLM_API_KEY / LLM_BASE_URL / LLM_MODEL 三项
+# 不改文件也可以用环境变量临时指定模式，跑完即恢复默认的离线 mock：
+LLM_MODE=real python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl \
        --output data/reports/eval_summary_real.json
 python scripts/run_ablation.py      # 重跑消融，这时的 delta 才有意义
 ```
+
+**密钥安全**：`.env` 与 `.env.*` 一律不入库（仅 `.env.example` 空模板提交）。
+Key 只放在 Authorization 请求头里，**只发往 `LLM_BASE_URL` 指定的模型厂商**；
+不写日志、不写报告、不写执行轨迹、不进 Git。默认 `LLM_MODE=mock` 完全离线，
+只有显式指定 `real` 才会发起网络请求。
 
 通义千问把 `LLM_BASE_URL` 换成 `https://dashscope.aliyuncs.com/compatible-mode/v1`；
 硅基流动换成 `https://api.siliconflow.cn/v1`。**只改三个参数，代码不动**。
 
 ✅ v0.4.1 已完成：`cases_eval.jsonl` 的标准答案 SQL 改为独立人工标注的常量，不再引用 `MOCK_RULES`，真值来源与生成器解耦；15 条标准 SQL 全部在四张表上实测可执行。回归门禁基线按新口径重新固化。
 
-模型接口异常或没装 SDK 时会自动回落 mock 并打印提示，系统永远有输出。
+模型接口异常、超时或限流时自动回落 mock 并打印提示，系统永远有输出。
 
 ---
 
@@ -307,7 +314,8 @@ python scripts/serve.py          # 或 Windows 双击 start_demo.bat
 | v0.3.2 | 2026-11-08 | 代码变化区自动跟随最新两个 tag |
 | v0.3.3 | 2026-11-09 | 本地目录与云端仓库统一为 agentic-data-analyst |
 | v0.4 | 2026-11-09 | UCI 公开数据集接入，两种数据源可切换 |
-| **v0.4.1** | **2026-11-09** | **标准 SQL 独立标注、评估集扩到 144 条** |
+| v0.4.1 | 2026-11-09 | 标准 SQL 独立标注、评估集扩到 144 条 |
+| **v0.5** | **2026-11-09** | **真实模型零依赖接入、密钥本地防护（默认仍离线）** |
 
 ### 数据源切换（v0.4）
 
