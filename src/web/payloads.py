@@ -42,6 +42,14 @@ def status_payload(version: str) -> dict:
     现在同时存在 SQLite 与 MySQL 两个后端，页面必须让人一眼看出
     「当前连的是哪个库、用哪条模型通道」，否则演示时数字对不上会很难解释。
 
+    v0.12.1 起这三项一律上报**实际生效值**，不再回显配置值：
+        - ``llm_backend``：mock 模式下报 ``mock``（此时根本没调用任何框架），
+          只有真跑模型且 LangChain 可用时才报 ``langchain``；
+        - ``db_driver``：SQLite 分支实际用的驱动（``sqlalchemy`` / ``sqlite3``）；
+        - ``vector_backend``：``off`` / ``pgvector`` / ``memory``。
+    原因是「配置写了 langchain」和「这题真的走了 langchain」是两件事，
+    状态栏混淆这两者，等于自己给自己埋一个答辩时解释不清的坑。
+
     密码做了打码：状态接口是给前端渲染用的，不应该把连接串里的
     明文密码发到浏览器（哪怕只是本地）。
     """
@@ -56,6 +64,33 @@ def status_payload(version: str) -> dict:
             rows = conn.execute("SELECT COUNT(*) FROM sensor_data").fetchone()[0]
         finally:
             conn.close()
+
+    # 实际生效的模型通道：mock 模式不调模型，说 langchain 就是虚报
+    llm_active = settings.llm_mode
+    if settings.llm_mode == "real":
+        llm_active = settings.llm_backend
+        if settings.llm_backend == "langchain":
+            try:
+                from ..llm import is_available
+                llm_active = "langchain" if is_available() else "urllib"
+            except Exception:
+                llm_active = "urllib"
+
+    # 实际生效的数据驱动：MySQL 恒为 SQLAlchemy；SQLite 取决于是否装得上
+    if settings.db_backend == "mysql":
+        db_driver = "sqlalchemy"
+    else:
+        from ..db.query import sqlite_driver
+        db_driver = sqlite_driver()
+
+    # 向量检索只在不开关时才探测，避免每次刷新状态都去连一次 PG（5 秒超时）
+    vector_backend = "off"
+    if settings.enable_vector_retrieval:
+        try:
+            from ..schema_retrieval import vector_store
+            vector_backend = "pgvector" if vector_store.available() else "memory"
+        except Exception:
+            vector_backend = "memory"
 
     # MySQL 模式下的行数单独查：DB_BACKEND=mysql 时页面要显示真库的规模
     mysql_rows = None
@@ -76,8 +111,11 @@ def status_payload(version: str) -> dict:
     return {
         "version": version,
         "llm_mode": settings.llm_mode,
-        "llm_backend": settings.llm_backend,
+        "llm_backend": llm_active,
+        "llm_backend_configured": settings.llm_backend,
         "db_backend": settings.db_backend,
+        "db_driver": db_driver,
+        "vector_backend": vector_backend,
         "db_exists": DB_PATH.exists() or settings.db_backend == "mysql",
         "sensor_rows": rows,
         "mysql_sensor_rows": mysql_rows,

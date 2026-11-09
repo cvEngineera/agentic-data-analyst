@@ -1,9 +1,15 @@
 @echo off
 cd /d "%~dp0"
+rem 用法：
+rem   start_demo.bat         -> mock 模式（规则模板，离线、免费、结果确定）
+rem   start_demo.bat real    -> real 模式（真调大模型，需 .env 里配好 LLM_API_KEY，按量计费）
+if /i "%~1"=="real" set LLM_MODE=real
+
 echo ============================================
 echo  agentic-data-analyst v0.12  local demo
-echo  FastAPI:  http://127.0.0.1:8000
-echo  API doc:  http://127.0.0.1:8000/docs
+echo  mode      : %LLM_MODE%
+echo  FastAPI   : http://127.0.0.1:8000
+echo  API doc   : http://127.0.0.1:8000/docs
 echo  Press Ctrl+C to stop.
 echo ============================================
 echo.

@@ -409,8 +409,8 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
     <section>
       <h3>数据源与运行状态</h3>
       <div class="muted" v-if="status">
-        <div>版本 <b>{{ status.version }}</b> · 模型 <b>{{ status.llm_mode }}</b>（{{ status.llm_backend }}） ·
-          数据库 <b>{{ status.db_backend }}</b></div>
+        <div>版本 <b>{{ status.version }}</b> · 模型 <b>{{ llmText }}</b> ·
+          数据库 <b>{{ status.db_backend }}</b>（{{ status.db_driver }}） · 向量 <b>{{ status.vector_backend }}</b></div>
         <div style="margin-top:5px">监测数据 <b>{{ status.sensor_rows }}</b> 行
           <span v-if="status.mysql_sensor_rows !== null"> · MySQL <b>{{ status.mysql_sensor_rows }}</b> 行</span>
           · 冒烟集 <b>{{ status.cases_smoke }}</b> 条 · 正式集 <b>{{ status.cases_full }}</b> 条 · 报告 <b>{{ status.reports.length }}</b> 份</div>
@@ -780,13 +780,24 @@ createApp({
     const statusText = computed(() => {
       if (!s.status) return '静态快照（未启动服务）· 示例问题可离线查看';
       const st = s.status;
-      return `数据库 ${st.db_backend} · ${st.sensor_rows} 行监测数据 · ` +
+      return `数据库 ${st.db_backend}（${st.db_driver}） · ${st.sensor_rows} 行监测数据 · ` +
              `冒烟 ${st.cases_smoke} / 正式 ${st.cases_full} 条 · ${st.reports.length} 份报告`;
     });
     const onlineTip = computed(() => s.online ? '实时模式 · 任意问题都会查库' : '离线快照模式：示例问题可查看预录结果');
+    // 模型通道显示「实际生效值」：mock 模式下根本没调模型，别把 langchain 写上去
+    const llmText = computed(() => {
+      const st = s.status;
+      if (!st) return '—';
+      if (st.llm_mode === 'mock') return 'mock（规则模板，未调模型）';
+      return `${st.llm_backend}（real）`;
+    });
     const dbBadge = computed(() => s.status ? (s.status.db_backend === 'mysql' ? 'MySQL' : 'SQLite') : 'SQLite');
-    const dbTitle = computed(() => s.status && s.status.mysql_sensor_rows !== null
-      ? `MySQL 中 ${s.status.mysql_sensor_rows} 行` : '数据库后端');
+    const dbTitle = computed(() => {
+      const st = s.status;
+      if (!st) return '数据库后端';
+      if (st.mysql_sensor_rows !== null && st.mysql_sensor_rows >= 0) return `MySQL 中 ${st.mysql_sensor_rows} 行`;
+      return `${st.db_backend} · 驱动 ${st.db_driver} · 只读`;
+    });
 
     /* ── 快捷键 ─────────────────────────────────────────────── */
     function onKey(e) {
@@ -819,7 +830,7 @@ createApp({
       // v-model 写回去的是普通属性，视图不会更新。toRefs 把每个字段
       // 变成 ref，模板里自动解包，双向绑定才成立。
       ...toRefs(s), threadEl,
-      filteredSessions, statusText, onlineTip, dbBadge, dbTitle,
+      filteredSessions, statusText, onlineTip, llmText, dbBadge, dbTitle,
       ask, quickAsk, newSession, openSession, delSession, runEval, runAblation, copy,
     };
   },

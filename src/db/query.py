@@ -90,10 +90,55 @@ def _normalize_value(value):
     return value
 
 
-def _run_sqlite(sql: str, params: tuple, readonly: bool,
-                timeout: float) -> tuple[list[str], list[tuple], str, float]:
-    """SQLite 分支：沿用 v0.2 起的只读连接与看门狗实现。
+def _run_sqlite_sa(sql: str, params: tuple,
+                   timeout: float) -> tuple[list[str], list[tuple], str, float]:
+    """SQLite 分支（v0.12.1 起）：走 SQLAlchemy Engine + text()。
 
+    为什么要从裸 sqlite3 换到 SQLAlchemy：申报表里写的数据访问层是
+    SQLAlchemy，如果评估与演示真正执行 SQL 的地方仍是 ``sqlite3``，
+    那这一项技术就只是「摆着看的适配代码」，答辩时经不起追问。
+    换成 Engine 之后，两条后端（SQLite / MySQL）走的是**同一套连接管理**，
+    区别只在 URL 与少量会话参数。
+
+    与裸 sqlite3 的语义对齐（不能变的地方）：
+        - 只读：URL 用 ``mode=ro&uri=true``，文件级只读，比 PRAGMA 更早生效；
+        - 超时：从 ``dbapi_connection`` 拿回原生 sqlite3 连接，挂
+          ``set_progress_handler`` 看门狗，失控 SQL 同样会被中断；
+        - 参数：仍是真正的绑定（``:p0`` 命名参数），不是字符串拼接；
+        - 返回值：text() 不带类型信息，取回的就是驱动原始值（文本/数值/NULL），
+          与 sqlite3 的 ``description`` + ``fetchmany`` 一致，
+          所以历史评估数字不会因为换驱动而漂移。
+
+    连接池用 NullPool（见 ``_readonly_sqlite_engine``）：建库脚本会整文件替换
+    ``bishe.db``，池里留着旧文件句柄会读到已删除的旧库，这一点在 Windows 上
+    尤其明显。
+    """
+    from sqlalchemy import text
+
+    eng = _readonly_sqlite_engine()   # 取引擎失败时抛出，交给上层降级到 sqlite3
+    t0 = time.perf_counter()
+    try:
+        with eng.connect() as conn:
+            # 拿回原生 sqlite3 连接挂看门狗；SQLAlchemy 本身没有语句超时概念
+            raw = conn.connection.dbapi_connection
+            raw.set_progress_handler(
+                lambda: 1 if time.perf_counter() - t0 > timeout else 0, 1000)
+            bound_sql, named = _convert_params(sql, params)
+            result = conn.execute(text(bound_sql), named)
+            cols = list(result.keys()) if result.returns_rows else []
+            rows = ([tuple(r) for r in result.fetchmany(settings.row_limit)]
+                    if cols else [])
+        return cols, rows, "", (time.perf_counter() - t0) * 1000
+    except Exception as exc:
+        return [], [], str(exc), (time.perf_counter() - t0) * 1000
+
+
+def _run_sqlite_raw(sql: str, params: tuple, readonly: bool,
+                    timeout: float) -> tuple[list[str], list[tuple], str, float]:
+    """SQLite 分支（裸 sqlite3）：只在 SQLAlchemy 不可用时使用。
+
+    v0.2~v0.11 一直是这条路径，保留它是为了「装不上 SQLAlchemy 也能跑评估」——
+    零依赖是这个工程的兜底承诺，不能因为补技术栈把兜底砍掉。
     评估结果全部来自这条路径，**不要改动其行为**，否则历史数字不可比。
     """
     from .core import connect
@@ -114,6 +159,72 @@ def _run_sqlite(sql: str, params: tuple, readonly: bool,
         return [], [], str(exc), (time.perf_counter() - t0) * 1000
     finally:
         conn.close()
+
+
+def _run_sqlite(sql: str, params: tuple, readonly: bool,
+                timeout: float) -> tuple[list[str], list[tuple], str, float]:
+    """SQLite 分支调度：优先 SQLAlchemy，不可用时退回 sqlite3。
+
+    降级是**显式**的：实际用了哪个驱动记在 ``_DRIVER`` 里，由
+    ``sqlite_driver()`` 暴露给状态接口，页面上能直接看到，
+    不会出现「文档写 SQLAlchemy、实际跑 sqlite3」的两套说法。
+    """
+    if readonly:
+        try:
+            out = _run_sqlite_sa(sql, params, timeout)
+        except Exception:
+            # 引擎建不起来（没装 SQLAlchemy / URI 不被支持）→ 退回裸驱动
+            _DRIVER["name"] = "sqlite3"
+            return _run_sqlite_raw(sql, params, readonly, timeout)
+        _DRIVER["name"] = "sqlalchemy"
+        return out
+    return _run_sqlite_raw(sql, params, readonly, timeout)
+
+
+# 实际生效的驱动名，供 /api/status 如实上报（"未探测" 表示本次进程还没查过库）
+_DRIVER: dict[str, str] = {"name": "未探测"}
+_SA_ENGINE = None
+
+
+def _readonly_sqlite_engine():
+    """构造（并缓存）只读 SQLite 引擎。
+
+    URL 里的 ``mode=ro`` 由 sqlite3 驱动的 URI 参数生效，比
+    ``PRAGMA query_only`` 更早——连接建立时文件就是只读打开的，
+    连 PRAGMA 都改不了，这是「数据库层面兜底」最硬的一层。
+
+    NullPool：每次 connect 新开文件句柄，用完即关。理由见 _run_sqlite_sa
+    的注释（建库脚本会整文件替换库文件）。
+    """
+    global _SA_ENGINE
+    if _SA_ENGINE is not None:
+        return _SA_ENGINE
+    from sqlalchemy import create_engine
+    from sqlalchemy.pool import NullPool
+
+    from ..config import DB_PATH
+
+    url = f"sqlite:///file:{DB_PATH.as_posix()}?mode=ro&uri=true"
+    _SA_ENGINE = create_engine(
+        url, future=True, poolclass=NullPool,
+        connect_args={"check_same_thread": False},
+    )
+    return _SA_ENGINE
+
+
+def sqlite_driver() -> str:
+    """返回 SQLite 分支实际使用的驱动名：``sqlalchemy`` / ``sqlite3``。
+
+    状态接口在**没有执行过任何查询**时调用它，所以这里做一次轻量探测：
+    只建引擎、不执行 SQL（建引擎不会打开文件，第一次 connect 才打开）。
+    """
+    if _DRIVER["name"] != "未探测":
+        return _DRIVER["name"]
+    try:
+        _readonly_sqlite_engine()
+        return "sqlalchemy"
+    except Exception:
+        return "sqlite3"
 
 
 def _run_mysql(sql: str, params: tuple, timeout: float) -> tuple[list[str], list[tuple], str, float]:
@@ -156,5 +267,6 @@ def run_sql(sql: str, params: tuple = (), readonly: bool = True,
     be = backend or settings.db_backend
     t = timeout if timeout is not None else settings.query_timeout
     if be == "mysql":
+        _DRIVER["name"] = "sqlalchemy"
         return _run_mysql(sql, params, t)
     return _run_sqlite(sql, params, readonly, t)

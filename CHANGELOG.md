@@ -12,6 +12,45 @@ Git 历史从 v0.2 开始记录（v0.1 时期还没建仓库，不伪造历史�
 
 ---
 
+## v0.12.1 · 2026-11-09 —— 把「说用了」变成「真的在用」
+
+**问题**：v0.12 补齐了申报表的技术栈，但复核发现三处名不副实——
+
+1. **SQLAlchemy 只挂在 MySQL 分支上**。默认 SQLite 执行路径仍是裸 `sqlite3`，
+   而评估、演示、单测全都走 SQLite，等于这项技术从未真正执行过一条业务 SQL；
+2. **状态接口报配置值而不是生效值**。`/api/status` 在 `LLM_MODE=mock` 时仍然
+   回 `llm_backend: "langchain"`，页面顶部也照此渲染，看着像「框架在跑」，
+   实际连模型都没调；
+3. **单测隐性依赖 mock**。开发机若把 `.env` 改成 `LLM_MODE=real`，测试会真的
+   联网调模型，两个依赖规则模板确定性的断言直接失败（实测 27 条里挂 2 条）。
+
+**做法**：
+
+| 改动 | 文件 | 说明 |
+|---|---|---|
+| SQLite 执行改走 SQLAlchemy | `src/db/query.py` | 引擎用 `mode=ro&uri=true` 只读打开，`NullPool` 避免建库换文件后读到旧句柄；超时仍靠原生 `set_progress_handler` 看门狗；参数仍是 `:p0` 真绑定 |
+| 保留裸驱动兜底 | 同上 `_run_sqlite_raw` | 装不上 SQLAlchemy 时自动退回 `sqlite3`，零依赖承诺不破 |
+| 状态接口报生效值 | `src/web/payloads.py` | 新增 `llm_backend_configured` / `db_driver` / `vector_backend`；`llm_backend` 改为 mock 时就说 mock |
+| 页面同步 | `src/web/index.html` | 侧栏显示「数据库 sqlite（sqlalchemy）」，工作台显示模型实际通道 |
+| 单测钉死 mock | `tests/test_smoke.py` | 模块级覆盖 `settings.llm_mode='mock'`，不再受 `.env` 影响 |
+| 演示开关 | `start_demo.bat` | `start_demo.bat real` 用真实模型启动（需要 API Key），不带参数仍是离线 mock |
+
+**验证**（都是本机实测）：
+
+- 单测 **27/27**；在 `LLM_MODE=real` 环境下重跑同样 **27/27**（此前会挂 2 条）；
+- 144 条正式集 mock **34/144 = 23.6%**，与 v0.6 基线**逐类完全一致**——
+  说明换驱动没有改变任何评估口径（这是这次改动最关键的验收点）；
+- 冒烟集 **15/15**；
+- 真实模型 + LangChain 通道：把 urllib 备用通道人为禁用后仍能生成 SQL 并返回 5 行，
+  证明走的是 `langchain_openai.ChatOpenAI`；
+- 只读仍然生效：`DELETE FROM alarm` 被数据库拒绝（`attempt to write a readonly database`）。
+
+**仍未解决**：MySQL 未建库（缺本机 root 密码）、pgvector 未启动（Docker 的 Linux 引擎
+被 WSL 安全策略拦住，`docker ps` 连不上 npipe）。这两项在状态接口里分别表现为
+`mysql_sensor_rows=null` 与 `vector_backend=off`，不会假装可用。
+
+---
+
 ## v0.12 · 2026-11-09 —— 技术栈对齐申报表
 
 **问题**：申报表列了 9 项技术，实际落地的只有 3 项（Python、LLM 接口、UCI 数据集）。

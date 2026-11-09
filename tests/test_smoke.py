@@ -20,10 +20,20 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.agent.runtime import run  # noqa: E402  （须在 sys.path 调整之后导入）
+from src.config import settings  # noqa: E402
 from src.db.core import connect, init_database, introspect  # noqa: E402
 from src.schema_retrieval.catalog import retrieve  # noqa: E402
 from src.presentation.render import choose_chart  # noqa: E402
 from src.sql.validator import validate  # noqa: E402
+
+# 单测一律钉死在 mock 口径上（v0.12.1）。
+# 原因：如果开发机上 .env 写了 LLM_MODE=real，测试会真的联网调模型——
+# 既慢又不确定，而且「危险语句应当进入校验层」这类断言依赖规则模板的
+# 确定性输出，真实模型可能直接拒绝回答，断言会假失败。
+# 显式覆盖而不是依赖环境，测试结果才可复现。
+settings.llm_mode = "mock"
+settings.enable_vector_retrieval = False
+settings.enable_semantic_retrieval = False
 
 
 class TestBaseline(unittest.TestCase):

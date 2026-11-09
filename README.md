@@ -3,15 +3,16 @@
 一个面向物联网监测数据的 NL2SQL 分析 Agent：自然语言提问 → 自动生成 SQL → 多步归因 → 可复现的分层评估。
 覆盖室内空气质量场景（教室 / 设备 / 读数 / 告警四表），带危险语句拦截、报错自纠、执行轨迹与图表输出。
 
-**当前版本：v0.12（2026-11-09）** —— 技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + pgvector + Vue 3/ECharts 全部接入代码路径（其中 **MySQL 与 pgvector 受本机环境限制未端到端跑通**，见第九节）；SQLite 仍作为评估冻结库；真实模型 3 轮均值 64.6% ± 0.7%。
+**当前版本：v0.12.1（2026-11-09）** —— 技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + pgvector + Vue 3/ECharts 全部接入代码路径（其中 **MySQL 与 pgvector 受本机环境限制未端到端跑通**，见第九节）；SQLAlchemy 已进入 **默认 SQLite 执行路径**（装不上时降级回 `sqlite3`，状态接口如实上报用了哪个）；真实模型 3 轮均值 64.6% ± 0.7%。
 
 > **技术栈对照（申报表 9 项 vs 代码实际）**：Python、大模型接口、UCI 数据集沿用；
-> FastAPI → `scripts/api.py`，SQLAlchemy → `src/db/orm.py`，
+> FastAPI → `scripts/api.py`，SQLAlchemy → `src/db/orm.py`（模型/引擎）+ `src/db/query.py`（执行，SQLite 与 MySQL 共用），
 > MySQL → `src/db/schema_mysql.sql` + `scripts/setup_mysql.py`，
 > LangChain → `src/llm/langchain_client.py`，
 > pgvector → `src/schema_retrieval/vector_store.py`，
 > Vue 3 + ECharts → `src/web/index.html`（依赖 vendor 在 `src/web/vendor/`）。
 > **评估集固定在 SQLite 上跑**，MySQL 只承担演示与部署，原因见 v0.12 的 CHANGELOG。
+> `/api/status` 的 `llm_backend` / `db_driver` / `vector_backend` 报的是**实际生效值**，不是配置值。
 
 > 代码已逐模块补齐详细注释：每个文件开头说明它在七模块架构中的位置与设计取舍，
 > 每个函数有参数/返回/副作用说明，关键分支（只读连接、危险语句不重试、外键一跳扩展、
@@ -62,6 +63,17 @@ python -m src.cli "各教室 CO2 均值排名" --chart                      # �
 ```bash
 python scripts/api.py            # FastAPI，http://127.0.0.1:8000，/docs 是接口文档
 python scripts/serve.py          # 零依赖兜底，http://127.0.0.1:8765
+```
+
+默认是 **mock 模式**（规则模板生成 SQL，离线、免费、结果确定），适合验证链路。
+要看真实模型的效果，用真实模式启动——模型通道会按 `LLM_BACKEND` 走 LangChain，
+页面右上角与侧栏会如实显示当前是 `mock` 还是 `real`：
+
+```bash
+# Windows：双击或命令行
+start_demo.bat real
+# 其他平台
+LLM_MODE=real python scripts/api.py
 ```
 
 切到 MySQL（可选，需本机已装 MySQL 8）：
@@ -468,6 +480,7 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 - 真实模型下消融 delta 非零，最大贡献来自 Schema 检索（−7.64pp）；
 - 目标指标中单表 75%（目标 85%）、多表 JOIN 45.8%（目标 65%）、归因 62.5%（目标 70%）未达标。开题报告已声明「以实测为准、如实报告未达成项」，论文需给原因分析，不要粉饰；
 - **Chroma / pgvector（v0.12 更新）**：v0.7 时本机装不上 `chromadb`，改用 `semantic.py` 的零依赖语义打分接到 `hybrid_score()`；v0.12 已按申报表补上 pgvector 通道（`vector_store.py`，HNSW + 余弦距离），但**本机 Docker 的 WSL 后端被安全策略拦住，容器未起，实测走的是内存向量降级路径**。两者的向量都是字符 n-gram 哈希，**不是神经网络 embedding**（DeepSeek 无 embedding 接口），语义能力弱于 BGE；开启后准确率 65.3% → 59.0%（**−6.25pp**，v0.7 实测），故默认关闭，见 5.4 与 `eval/semantic_compare.json`；
+- **SQLAlchemy 是默认执行路径（v0.12.1）**：`db/query.py` 用 `Engine + text()` 执行 SQLite 查询，只读靠 URI 的 `mode=ro`、超时靠原生 `set_progress_handler`、参数仍是 `:p0` 真绑定；装不上 SQLAlchemy 时自动降级 `sqlite3`，`/api/status` 的 `db_driver` 会显示实际用了哪个，不会出现「文档写一套、实际跑另一套」；
 - **MySQL 迁移脚本已就绪但未在本机跑通**：`scripts/setup_mysql.py` 需要本机 root 密码，本次开发环境未提供，因此 MySQL 分支的代码路径未做端到端验证。评估与演示默认仍是 SQLite，不影响任何已有数字；
 - **评估固定 SQLite**：144 条用例的标准 SQL 是 SQLite 方言，`evaluate()` 会强制把后端钉回 sqlite。MySQL 只用于演示/部署，两者的数据由迁移脚本保证一致；不要把 MySQL 上的结果与评估数字混着说；
 - **LangGraph 外部框架基线（开题报告 5.1）未实施**；v0.12 起 SQL 生成走 LangChain（`langchain_openai.ChatOpenAI`），但**多步归因仍是自研运行时**，没有用 LangGraph 的图编排。论文措辞要区分「用了 LangChain」与「用了 LangGraph」；
