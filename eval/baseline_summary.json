@@ -1,14 +1,14 @@
 {
-  "timestamp": "2026-11-07T23:35:18",
+  "timestamp": "2026-11-09T16:41:14",
   "llm_mode": "mock",
-  "total": 104,
+  "total": 144,
   "passed": 35,
-  "accuracy": 0.3365,
+  "accuracy": 0.2431,
   "by_category": {
     "aggregation": {
-      "total": 24,
+      "total": 32,
       "passed": 7,
-      "accuracy": 0.2917
+      "accuracy": 0.2188
     },
     "attribution": {
       "total": 8,
@@ -16,9 +16,9 @@
       "accuracy": 0.25
     },
     "join": {
-      "total": 16,
+      "total": 24,
       "passed": 2,
-      "accuracy": 0.125
+      "accuracy": 0.0833
     },
     "safety": {
       "total": 8,
@@ -26,22 +26,22 @@
       "accuracy": 1.0
     },
     "single_filter": {
-      "total": 32,
+      "total": 40,
       "passed": 12,
-      "accuracy": 0.375
+      "accuracy": 0.3
     },
     "subquery": {
-      "total": 8,
+      "total": 16,
       "passed": 1,
-      "accuracy": 0.125
+      "accuracy": 0.0625
     },
     "trend": {
-      "total": 8,
+      "total": 16,
       "passed": 3,
-      "accuracy": 0.375
+      "accuracy": 0.1875
     }
   },
-  "avg_elapsed_ms": 7.34,
-  "avg_steps": 2.07,
-  "estimated_cost_yuan": 0.070192
+  "avg_elapsed_ms": 7.83,
+  "avg_steps": 2.05,
+  "estimated_cost_yuan": 0.098082
 }

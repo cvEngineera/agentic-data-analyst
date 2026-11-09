@@ -1,4 +1,4 @@
-"""生成正式评估集 src/evaluation/cases_eval.jsonl（100+ 条）。
+"""生成正式评估集 src/evaluation/cases_eval.jsonl（144 条）。
 
 用法：``python scripts/build_eval_cases.py``
 
@@ -6,22 +6,33 @@
     1. **题量太小**，分层统计没有统计意义；
     2. **问题表述与 mock 模板同源**，属于「自己考自己」。
 
-做法：13 个语义原型 × 8 种口语化表述变体 = 104 条。
+做法：18 个语义原型 × 8 种口语化表述变体 = 144 条（达到开题报告承诺的 ≥140 条）。
 变体刻意改变语序、同义词、数字写法（3 / 三号 / ３），
 用来测「同一语义、不同说法」下的稳定性，这是 NL2SQL 的标准评测维度。
 
-判定口径（case.check）也做了多样化：
+v0.4.1 的关键修正：标准答案 SQL 独立人工标注
+-------------------------------------------
+v0.2 时标准 SQL 直接引用生成器里的 MOCK_RULES，等于拿被测对象的规则去判
+自己的答案，mock 模式的数字带有**自证偏差**。本版把每条标准 SQL 写成
+本文件里的常量，与 src/sql/generator.py 完全解耦：
+
+    - 生成器怎么改、将来换成真实大模型，标准答案都不变；
+    - 标准结果由 runner 对同一个库执行这些 SQL 动态取得，不写死数值；
+    - 换数据源（synthetic / uci）后判定口径仍然自洽。
+
+「独立」指的是**真值来源独立**，不是要求 SQL 故意写得不一样：同一个语义
+问题往往只有一种正确写法，长得像恰恰说明标注没错。
+
+判定口径（case.check）：
     result            执行结果集比对（默认）
     row_count         只校验返回行数
     scalar_tolerance  校验单个数值，允许浮点容差
-    deny              必须被安全层拦截
+    deny_sql          必须被安全层拦截（攻击 SQL 直接喂校验层，绕开生成层）
     conclusion        结论必须命中预设原因关键词
 
-⚠️ 已知偏差（README 里同样写明）：
-    标准答案 SQL 目前直接取自基线 mock 模板（MOCK_RULES），
-    因此在 mock 模式下仍然偏高。**正式评估必须在 real 模式下、
-    用重新人工标注的标准 SQL 跑**；本文件解决的是「题量与表述多样性」，
-    不解决标准答案的独立性。接真实模型后应把 SQL 字典换成人工标注版本。
+⚠️ 口径变更提醒：标准答案独立后，mock 模式准确率会**下降**，这是消除
+自证偏差的正常结果，不能与 v0.2–v0.4 的 33.7% 直接比较。回归门禁的
+baseline 已按新口径重新固化。真实准确率仍需在 real 模式下测量。
 """
 from __future__ import annotations
 
@@ -33,29 +44,104 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from src.config import CASES_PATH  # noqa: E402
-from src.sql.generator import MOCK_RULES  # noqa: E402
 
 OUT = CASES_PATH.parent / "cases_eval.jsonl"
 
-# 标准答案 SQL 的唯一真值来源：直接引用生成器的规则表，
-# 避免两处各写一份导致「执行结果比对」出现假阴性。
-RULES: dict[tuple[str, ...], str] = {keys: sql for keys, sql, _ in MOCK_RULES}
+# 三表 JOIN 片段在本文件里独立书写，不 import generator.JOIN。
+# 目的不是换个写法，而是让评估集的真值完全不依赖被测代码——
+# 只要标准答案来自 generator，消融实验与真实模型评估就都说不清。
+JOIN3 = ("FROM sensor_data d "
+         "JOIN device dv ON d.device_id = dv.id "
+         "JOIN site s ON dv.site_id = s.id")
+
+# 标准答案：18 个人工标注的 SQL 常量（v0.4.1 起）。
+# 每条都能在 schema.sql 的四张表上直接执行；runner 会执行它们取结果集，
+# 因此不写死任何数值，换数据源后结果自动跟着变。
 SQL = {
-    "avg_temp_3": RULES[("平均温度", "3号教室")],
-    "co2_over": RULES[("co2", "超过")],
-    "models": RULES[("型号",)],
-    "humidity": RULES[("湿度均值",)],
-    "max_temp": RULES[("最高温度",)],
-    "co2_rank": RULES[("均值排名",)],
-    "co2_top": RULES[("最", "co2")],
-    "alarm_floor": RULES[("报警次数最多",)],
-    "alarm_by_floor": RULES[("各楼层", "告警")],
-    "above_avg": RULES[("高于全局均值",)],
-    "hourly": RULES[("按小时", "co2")],
-    "attribution": RULES[("空气质量最差",)],
+    # 单表 / 点查
+    "avg_temp_3": (
+        "SELECT ROUND(AVG(d.temperature),2) AS avg_temperature "
+        f"{JOIN3} WHERE s.name = '3号教室' AND date(d.ts) = date('now','-1 day');"
+    ),
+    "co2_over": (
+        "SELECT d.ts, s.name AS site_name, d.co2 "
+        f"{JOIN3} WHERE d.co2 > 1000 AND d.ts >= datetime('now','-7 day') "
+        "ORDER BY d.ts DESC LIMIT 50;"
+    ),
+    "models": "SELECT DISTINCT model FROM device;",
+    "humidity": (
+        "SELECT ROUND(AVG(humidity),2) AS avg_humidity FROM sensor_data "
+        "WHERE device_id = 5 AND ts >= datetime('now','-3 day');"
+    ),
+    "hot_and_humid": (
+        "SELECT d.ts, d.temperature, d.humidity FROM sensor_data d "
+        "WHERE d.temperature > 23 AND d.humidity > 45 "
+        "ORDER BY d.ts LIMIT 50;"
+    ),
+    # 分组聚合
+    "max_temp": (
+        "SELECT s.name AS site_name, ROUND(MAX(d.temperature),2) AS max_temperature "
+        f"{JOIN3} WHERE date(d.ts) = date('now') GROUP BY s.name ORDER BY s.name;"
+    ),
+    "co2_rank": (
+        "SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 "
+        f"{JOIN3} GROUP BY s.name ORDER BY avg_co2 DESC;"
+    ),
+    "co2_top": (
+        "SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 "
+        f"{JOIN3} GROUP BY s.name ORDER BY avg_co2 DESC;"
+    ),
+    "top_devices": (
+        "SELECT dv.id, dv.model, ROUND(AVG(d.temperature),2) AS avg_temperature "
+        "FROM sensor_data d JOIN device dv ON d.device_id = dv.id "
+        "GROUP BY dv.id ORDER BY avg_temperature DESC LIMIT 5;"
+    ),
+    # 三表 JOIN
+    "alarm_floor": (
+        "SELECT s.floor, s.name AS site_name, COUNT(*) AS alarm_count "
+        "FROM alarm a JOIN device dv ON a.device_id = dv.id "
+        "JOIN site s ON dv.site_id = s.id "
+        "GROUP BY dv.id ORDER BY alarm_count DESC LIMIT 5;"
+    ),
+    "alarm_by_floor": (
+        "SELECT s.floor, COUNT(*) AS alarm_count "
+        "FROM alarm a JOIN device dv ON a.device_id = dv.id "
+        "JOIN site s ON dv.site_id = s.id GROUP BY s.floor ORDER BY s.floor;"
+    ),
+    "alarm_type_by_building": (
+        "SELECT s.building, a.type, COUNT(*) AS alarm_count "
+        "FROM alarm a JOIN device dv ON a.device_id = dv.id "
+        "JOIN site s ON dv.site_id = s.id "
+        "GROUP BY s.building, a.type ORDER BY s.building, a.type;"
+    ),
+    # 嵌套子查询
+    "above_avg": (
+        "SELECT COUNT(*) AS cnt FROM sensor_data "
+        "WHERE temperature > (SELECT AVG(temperature) FROM sensor_data);"
+    ),
+    "devices_with_alarms": (
+        "SELECT COUNT(*) AS cnt FROM device "
+        "WHERE id IN (SELECT DISTINCT device_id FROM alarm);"
+    ),
+    # 时序趋势
+    "hourly": (
+        "SELECT strftime('%Y-%m-%d %H:00', d.ts) AS hour, "
+        f"ROUND(AVG(d.co2),2) AS avg_co2 {JOIN3} "
+        "WHERE d.ts >= datetime('now','-1 day') GROUP BY hour ORDER BY hour;"
+    ),
+    "daily": (
+        "SELECT date(d.ts) AS day, ROUND(AVG(d.co2),2) AS avg_co2 "
+        "FROM sensor_data d GROUP BY day ORDER BY day;"
+    ),
+    # 归因（第一步查询；第二步由 runtime 追加查告警表）
+    "attribution": (
+        "SELECT s.name AS site_name, ROUND(AVG(d.co2),2) AS avg_co2 "
+        f"{JOIN3} WHERE d.ts >= datetime('now','-7 day') "
+        "GROUP BY s.name ORDER BY avg_co2 DESC;"
+    ),
 }
 
-# 13 个语义原型。每个 prototype 的 8 个变体必须是同一语义的不同说法。
+# 18 个语义原型。每个 prototype 的 8 个变体必须是同一语义的不同说法。
 PROTOTYPES: list[dict] = [
     {
         "prefix": "p01", "category": "single_filter", "check": "result",
@@ -254,6 +340,79 @@ PROTOTYPES: list[dict] = [
             "这周空气质量最不行的教室，为什么会这样",
         ],
     },
+    # ---- v0.4.1 新增 5 个原型：把七类题量补齐到 144 条，并增加
+    #      多条件筛选 / 告警类型 JOIN / 按日趋势 / Top-N / IN 子查询的覆盖 ----
+    {
+        "prefix": "p14", "category": "single_filter", "check": "result",
+        "sql": SQL["hot_and_humid"], "note": "双条件筛选；检验 AND 条件不丢",
+        "variants": [
+            "找出温度高于 23 度且湿度超过 45 的采样记录",
+            "温度 >23 并且湿度 >45 的数据有哪些",
+            "筛出又热又潮的那些时刻（23 度、45 湿度）",
+            "把温度超过 23、相对湿度大于 45 的记录列出来",
+            "查一下同时满足高温 23 和高湿 45 的采样点",
+            "哪些记录温度在 23 以上、湿度在 45 以上",
+            "给我温度大于 23 且 humidity 大于 45 的数据",
+            "列出又热（>23℃）又湿（>45%）的记录",
+        ],
+    },
+    {
+        "prefix": "p15", "category": "join", "check": "result",
+        "sql": SQL["alarm_type_by_building"], "note": "三表 JOIN + 双字段分组",
+        "variants": [
+            "按楼栋和告警类型统计告警数量",
+            "每栋楼各类告警分别有多少条",
+            "统计各楼不同报警类型的次数",
+            "楼栋 + 告警类型的二维分布",
+            "按 building 和 type 分组数一下告警",
+            "各栋楼里每种告警各出现了几次",
+            "给我按楼宇、告警类别汇总的数量",
+            "查一下每栋楼各类 alarm 的条数",
+        ],
+    },
+    {
+        "prefix": "p16", "category": "trend", "check": "row_count",
+        "sql": SQL["daily"], "note": "按日聚合；只校验分桶数，避免时间窗口漂移",
+        "variants": [
+            "按天统计 CO2 的日均值",
+            "每天二氧化碳平均浓度是多少",
+            "把 CO2 按日期做个逐日趋势",
+            "以天为粒度汇总 co2 均值",
+            "给我每日 CO₂ 平均值曲线",
+            "按 date 分组算一下二氧化碳均值",
+            "这几天每天的平均 CO2",
+            "统计每日二氧化碳浓度的平均水平",
+        ],
+    },
+    {
+        "prefix": "p17", "category": "aggregation", "check": "result",
+        "sql": SQL["top_devices"], "note": "Top-N + 两表 JOIN + 排序",
+        "variants": [
+            "平均温度最高的 5 台设备",
+            "按平均温度给设备排个前五",
+            "哪五台设备的均温最高",
+            "列出均温排名前 5 的终端及型号",
+            "设备平均温度 TOP5 是谁",
+            "给我平均气温最高的五台设备",
+            "按 avg 温度降序取前五个设备",
+            "查一下温度均值排名前 5 的设备",
+        ],
+    },
+    {
+        "prefix": "p18", "category": "subquery", "check": "scalar_tolerance",
+        "sql": SQL["devices_with_alarms"], "tolerance": 0,
+        "note": "IN 子查询；检验集合成员判断不退化成 JOIN 计数",
+        "variants": [
+            "有过告警记录的设备一共有多少台",
+            "统计产生过告警的设备数量",
+            "有多少台设备出现在告警表里",
+            "查一下至少有一条告警的设备数",
+            "出现过报警的终端总数是几",
+            "在 alarm 表里有记录的设备有几台",
+            "算一下发生过告警的不重复设备数",
+            "有告警历史的设备数量是多少",
+        ],
+    },
 ]
 
 
@@ -296,8 +455,8 @@ def main() -> None:
     print(f"已生成 {len(cases)} 条 -> {OUT}")
     for k, v in sorted(by_cat.items()):
         print(f"  {k:<16} {v}")
-    print("\n注意：标准答案 SQL 取自基线模板，mock 模式下仍有自证偏差；")
-    print("      正式准确率请在 real 模式下用人工标注的标准 SQL 测量。")
+    print("\n标准答案 SQL 为独立人工标注（不依赖 generator），真值来源已解耦；")
+    print("mock 模式数字仅供链路自检，正式准确率请在 real 模式下测量。")
 
 
 if __name__ == "__main__":

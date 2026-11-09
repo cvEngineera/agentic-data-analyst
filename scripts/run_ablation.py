@@ -21,6 +21,6 @@ from src.evaluation.ablation import main  # noqa: E402
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="逐层消融实验")
     ap.add_argument("--cases", type=Path, default=None,
-                    help="测试集 JSONL 路径，默认 104 条正式评估集")
+                    help="测试集 JSONL 路径，默认 144 条正式评估集")
     args = ap.parse_args()
     main(args.cases)

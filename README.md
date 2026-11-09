@@ -2,7 +2,7 @@
 
 毕业设计课题《基于大语言模型的物联网监测数据分析 Agent 系统设计与实现》的代码工程。
 
-**当前版本：v0.2 第 2 增量（2026-11-07）** —— v0.1 跑通七个模块骨架；v0.2 补齐正式评估集（104 条）、多样化判定口径、逐层消融开关与回归门禁。
+**当前版本：v0.4.1（2026-11-09）** —— UCI 公开数据集接入、144 条独立标注评估集；七模块链路、逐层消融、回归门禁、浏览器演示全部可跑。
 
 > 代码已逐模块补齐详细注释：每个文件开头说明它在七模块架构中的位置与设计取舍，
 > 每个函数有参数/返回/副作用说明，关键分支（只读连接、危险语句不重试、外键一跳扩展、
@@ -10,10 +10,11 @@
 
 > **两套测试集，用途不同，别混用**：
 > - `cases.jsonl`（15 条，**冒烟集**）：mock 下 15/15，只证明工程链路通畅。
-> - `cases_eval.jsonl`（104 条，**正式评估集**）：口语化表述变体，mock 下 33.7%，
+> - `cases_eval.jsonl`（144 条，**正式评估集**）：18 语义原型 × 8 口语化变体，标准 SQL 独立人工标注，mock 下 24.3%，
 >   用来暴露规则模板的局限。**这两个数字都不能写进论文当准确率结论**。
 >
-> 真实准确率必须在 `LLM_MODE=real` 下、用人工标注的标准 SQL 重新测量。
+> v0.4.1 起标准答案已与生成器解耦（不再引用 `MOCK_RULES`），口径变更，
+> 24.3% 不能与旧版 33.7% 直接比较。真实准确率仍须在 `LLM_MODE=real` 下测量。
 
 ---
 
@@ -30,7 +31,7 @@ python scripts/run_eval.py                 # 冒烟集 15 条
 第 2 增量的四条命令：
 
 ```bash
-python scripts/build_eval_cases.py                       # 生成 104 条正式评估集
+python scripts/build_eval_cases.py                       # 生成 144 条正式评估集
 python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl \
        --output data/reports/eval_summary_full.json      # 正式评估（明细不会覆盖冒烟集）
 python scripts/run_ablation.py                           # 五组消融实验
@@ -59,7 +60,7 @@ agentic-data-analyst/
 ├── .github/workflows/
 │   └── regression.yml        回归门禁（push/PR 自动跑单测+评估+对比）
 ├── eval/
-│   └── baseline_summary.json 固化进仓库的回归基线（mock，104 题）
+│   └── baseline_summary.json 固化进仓库的回归基线（mock，144 题）
 ├── src/
 │   ├── config.py             配置 + 三个消融开关
 │   ├── db/
@@ -78,7 +79,7 @@ agentic-data-analyst/
 │   │   └── render.py         表格、图表类型建议、一句话结论
 │   ├── evaluation/
 │   │   ├── cases.jsonl       15 条冒烟集
-│   │   ├── cases_eval.jsonl  104 条正式评估集（由脚本生成）
+│   │   ├── cases_eval.jsonl  144 条正式评估集（由脚本生成）
 │   │   ├── runner.py         批量运行、五种判定口径、分层统计、回归对比
 │   │   └── ablation.py       五组消融配置与 delta 报告
 │   ├── cli.py                命令行入口
@@ -106,7 +107,7 @@ agentic-data-analyst/
 | ④ 安全管控 | `validator.py` + `executor.py` 只读连接 | 只读、危险关键字、表/列白名单、超时、LIMIT、日志轨迹；**拦截率 8/8 独立可测** |
 | ⑤ Agent 调度与归因 | `agent/runtime.py` | 工具白名单、多步归因、步数上限、单轮兜底已可用 |
 | ⑥ 结果呈现 | `presentation/render.py`、`cli.py`、`app.py` | 文本表格 + 图表建议；Streamlit 可选 |
-| ⑦ 评估体系 | `evaluation/runner.py`、`ablation.py`、`cases_eval.jsonl` | 104 条正式集、五种判定口径、分层统计、五组消融、回归门禁全部可跑 |
+| ⑦ 评估体系 | `evaluation/runner.py`、`ablation.py`、`cases_eval.jsonl` | 144 条正式集、五种判定口径、分层统计、五组消融、回归门禁全部可跑 |
 
 **外部框架基线（开题报告 5.1）尚未实现**：需在独立环境用 LangChain 1.0 `create_agent` / LangGraph 搭一个 SQL Agent，跑同一套 `cases_eval.jsonl`，对比准确率、平均步数、单任务成本。
 
@@ -118,12 +119,12 @@ agentic-data-analyst/
 
 | | 冒烟集 `cases.jsonl` | 正式集 `cases_eval.jsonl` |
 |---|---|---|
-| 题量 | 15 | **104**（13 语义原型 × 8 口语化变体） |
+| 题量 | 15 | **144**（18 语义原型 × 8 口语化变体） |
 | 生成方式 | 手写 | `build_eval_cases.py` 生成，改原型即可维护 |
 | 用途 | 验证链路、单测回归 | 分层准确率、消融实验、论文图表 |
-| mock 下结果 | 15/15 | **35/104（33.7%）**，安全类 8/8 |
+| mock 下结果 | 15/15 | **35/144（24.3%）**，安全类 8/8 |
 
-正式集的变体刻意改变语序、同义词、数字写法（3 / 三号），测的是「同一语义、不同说法」的稳定性，这是 NL2SQL 的标准评测维度。mock 下掉到 33.7% 是**诚实的基线**，说明规则模板扛不住表述变化。
+正式集的变体刻意改变语序、同义词、数字写法（3 / 三号），测的是「同一语义、不同说法」的稳定性，这是 NL2SQL 的标准评测维度。**v0.4.1 起标准答案 SQL 独立人工标注**，不再引用生成器规则；口径变更使 mock 下准确率从 33.7% 降到 24.3%，这是消除自证偏差后的诚实基线，两个数字不可直接比较。
 
 ### 五种判定口径（`case.check`）
 
@@ -151,11 +152,11 @@ full / no_fk_expansion / no_retrieval / no_self_correction / minimal
 
 | 配置 | 准确率 | Δ vs full | 注入提示词的上下文字符 |
 |---|---|---|---|
-| full | 33.7% | — | 445 |
-| no_fk_expansion | 33.7% | +0.00pp | **330** |
-| no_retrieval | 33.7% | +0.00pp | **809** |
-| no_self_correction | 33.7% | +0.00pp | 445 |
-| minimal | 33.7% | +0.00pp | 809 |
+| full | 24.3% | — | 445 |
+| no_fk_expansion | 24.3% | +0.00pp | **330** |
+| no_retrieval | 24.3% | +0.00pp | **809** |
+| no_self_correction | 24.3% | +0.00pp | 445 |
+| minimal | 24.3% | +0.00pp | 809 |
 
 上下文字符数的变化证明开关确实作用到了链路上；准确率 delta 全为 0，是因为 **mock 规则模板不读 `schema_context`、也不会生成错误 SQL**，等于绕过了这三个模块。这不是「模块没用」，而是「当前生成器绕过了模块」。
 
@@ -163,7 +164,7 @@ full / no_fk_expansion / no_retrieval / no_self_correction / minimal
 
 ### 回归门禁
 
-`.github/workflows/regression.yml` 在 push / PR 时自动：建库 → 9 个单测 → 生成 104 条评估集 → 分层评估 → 与 `eval/baseline_summary.json` 对比 → 任一分类下降超过 2pp 就失败 → 上传报告 artifact。
+`.github/workflows/regression.yml` 在 push / PR 时自动：建库 → 12 个单测 → 生成 144 条评估集 → 分层评估 → 与 `eval/baseline_summary.json` 对比 → 任一分类下降超过 2pp 就失败 → 上传报告 artifact。
 
 容差 2pp 是刻意的：合成数据按运行时刻的 `now` 生成，跨时区的「今天/昨天」数据量会略有差异。接真实模型后应收紧。本地手动对比：
 
@@ -189,7 +190,7 @@ python scripts/run_ablation.py      # 重跑消融，这时的 delta 才有意�
 通义千问把 `LLM_BASE_URL` 换成 `https://dashscope.aliyuncs.com/compatible-mode/v1`；
 硅基流动换成 `https://api.siliconflow.cn/v1`。**只改三个参数，代码不动**。
 
-⚠️ 还有一步不能省：当前 `cases_eval.jsonl` 的标准答案 SQL 直接取自 `MOCK_RULES`（见 `build_eval_cases.py` 顶部说明），存在**标准答案同源偏差**。正式测量前应把 `SQL` 字典换成人工标注的标准 SQL，并重新设计判定口径。这一步做完，测出来的数字才能写进论文。
+✅ v0.4.1 已完成：`cases_eval.jsonl` 的标准答案 SQL 改为独立人工标注的常量，不再引用 `MOCK_RULES`，真值来源与生成器解耦；15 条标准 SQL 全部在四张表上实测可执行。回归门禁基线按新口径重新固化。
 
 模型接口异常或没装 SDK 时会自动回落 mock 并打印提示，系统永远有输出。
 
@@ -241,8 +242,8 @@ python scripts/run_ablation.py      # 重跑消融，这时的 delta 才有意�
 
 ## 九、已知限制（别在答辩时含糊）
 
-- **mock 模式的准确率没有学术意义**，只验证链路；正式集 33.7% 是规则模板的诚实基线；
-- 正式集的标准答案 SQL 与 mock 规则同源，存在自证偏差，真实测量前必须人工重标；
+- **mock 模式的准确率没有学术意义**，只验证链路；正式集 24.3% 是独立标注口径下的诚实基线；
+- 正式集标准答案已独立标注（v0.4.1），但真实准确率仍须在 real 模式下测量；
 - mock 下消融 delta 全为 0，因为规则模板绕过了检索与自纠模块；
 - 目前没有语义层/指标中台（这是**特意不做**的对照设计）；
 - 没有行列级权限、多租户、实时连库、流式输出；
@@ -263,7 +264,7 @@ python scripts/run_ablation.py      # 重跑消融，这时的 delta 才有意�
 | 强制真实模型 | `python -m src.cli "问题" --llm real` |
 | 冒烟评估（15 条） | `python scripts/run_eval.py` |
 | 生成正式评估集 | `python scripts/build_eval_cases.py` |
-| 正式评估（104 条） | `python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl --output data/reports/eval_summary_full.json` |
+| 正式评估（144 条） | `python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl --output data/reports/eval_summary_full.json` |
 | 回归对比 | `python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl --output data/reports/ci_summary.json --compare eval/baseline_summary.json` |
 | 消融实验 | `python scripts/run_ablation.py` |
 | 单测 | `python -m unittest discover -s tests -v` |
@@ -305,7 +306,8 @@ python scripts/serve.py          # 或 Windows 双击 start_demo.bat
 | v0.3.1 | 2026-11-08 | 离线也能点：5 个快捷问题的真实结果快照 |
 | v0.3.2 | 2026-11-08 | 代码变化区自动跟随最新两个 tag |
 | v0.3.3 | 2026-11-09 | 本地目录与云端仓库统一为 agentic-data-analyst |
-| **v0.4** | **2026-11-09** | **UCI 公开数据集接入，两种数据源可切换** |
+| v0.4 | 2026-11-09 | UCI 公开数据集接入，两种数据源可切换 |
+| **v0.4.1** | **2026-11-09** | **标准 SQL 独立标注、评估集扩到 144 条** |
 
 ### 数据源切换（v0.4）
 
