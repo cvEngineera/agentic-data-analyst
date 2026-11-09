@@ -98,24 +98,49 @@ def _connect():
 
     只在真正使用向量库时调用；没装 PG 的环境不会因为 import 就报错，
     因为 psycopg 是延迟 import 的。
+
+    ``connect_timeout=2``：本机 PG 应该毫秒级握手，2 秒还连不上说明根本
+    没起；留 5 秒会让「开了开关但没起容器」的每次检索都白等 5 秒（实测
+    Windows 上被防火墙丢包时确实是等满超时才返回）。
     """
     import psycopg
 
-    return psycopg.connect(settings.pgvector_url, autocommit=True, connect_timeout=5)
+    return psycopg.connect(settings.pgvector_url, autocommit=True, connect_timeout=2)
+
+
+# 可用性探测结果缓存：连不上时每次检索都要付出一次连接超时，
+# 而调用方（catalog._vector_scores）是按问题缓存的，换问题就会再探一次。
+# 缓存 60 秒，既不会在容器起来后长期误判，也不会让降级路径反复卡住。
+_AVAIL: dict[str, float | bool | None] = {"ok": None, "at": 0.0}
+_AVAIL_TTL = 60.0
 
 
 def available() -> bool:
     """探测 pgvector 是否可用（能连上并且扩展已启用）。
 
     返回 False 不算错误：``catalog`` 会退回到内存打分，主链路继续可用。
-    这个函数被状态接口调用，所以必须**快**（5 秒连接超时）且不抛异常。
+    这个函数被状态接口调用，所以必须**快**且不抛异常。
+
+    结果带 60 秒缓存：容器晚起一分钟内被判定不可用，是**可接受**的代价，
+    换掉的是「每个新问题都卡一次连接超时」——降级路径不该比主路径还慢。
     """
+    import time
+
+    now = time.time()
+    if _AVAIL["ok"] is not None and now - float(_AVAIL["at"]) < _AVAIL_TTL:
+        return bool(_AVAIL["ok"])
+
+    ok = False
     try:
         with _connect() as conn, conn.cursor() as cur:
             cur.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
-            return cur.fetchone() is not None
+            ok = cur.fetchone() is not None
     except Exception:
-        return False
+        ok = False
+    finally:
+        _AVAIL["ok"] = ok
+        _AVAIL["at"] = now
+    return ok
 
 
 def ensure_schema() -> None:
