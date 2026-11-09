@@ -40,7 +40,7 @@ from src.evaluation.ablation import run_ablation  # noqa: E402
 from src.evaluation.runner import evaluate, load_cases  # noqa: E402
 
 WEB_DIR = ROOT / "src" / "web"
-VERSION = "v0.3.3"
+VERSION = "v0.4"
 
 
 def _git_text(args: list[str]) -> str:
@@ -60,7 +60,15 @@ def _git_text(args: list[str]) -> str:
 
 
 def _status() -> dict:
-    """汇总当前版本状态，供页面顶部状态栏显示。"""
+    """汇总当前版本状态，供页面顶部状态栏显示。
+
+    v0.4 起额外返回数据源元信息（synthetic / uci）。页面要让人一眼看出
+    当前跑的是可复现合成数据还是 UCI 公开真实数据，避免把两种口径的
+    评估数字混着看——这是数据接入适配器落地后必须补上的一处可解释性。
+    """
+    # 局部导入：启动服务时不触碰 uci_loader 的下载/解压相关代码
+    from src.db.uci_loader import read_meta
+    meta = read_meta()
     rows = 0
     if DB_PATH.exists():
         conn = connect(readonly=True)
@@ -78,6 +86,9 @@ def _status() -> dict:
         "llm_mode": settings.llm_mode,
         "db_exists": DB_PATH.exists(),
         "sensor_rows": rows,
+        "data_source": meta.get("source", "synthetic"),
+        "dataset": meta.get("dataset", ""),
+        "data_note": meta.get("note", ""),
         "cases_smoke": len(load_cases()),
         "cases_full": len(load_cases(ROOT / "src" / "evaluation" / "cases_eval.jsonl"))
         if (ROOT / "src" / "evaluation" / "cases_eval.jsonl").exists() else 0,

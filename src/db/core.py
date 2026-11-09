@@ -1,4 +1,4 @@
-"""数据层：DDL 执行、只读连接、表结构自省与可复现的合成数据。
+"""数据层：DDL 执行、只读连接、表结构自省，以及两种可切换的数据源。
 
 对应开题报告「4.1（1）数据层建设」与「4.3 技术选型」里的 SQLite/MySQL 一层。
 
@@ -11,8 +11,9 @@
 3. **内置可演示的异常剧情**。3 号教室最近两天 CO2 显著偏高，并伴随一条
    CALIBRATION_DRIFT 告警，用于验证「发现异常 → 追加查询 → 定位原因」这条
    多步归因链路是否真的走通。
-4. **数据接入适配器**。后续换成 UCI 公开数据集时，只需改写 seed() 的读数
-   与字段映射，保持四张表结构不变，其余六个模块一行都不用改。
+4. **数据接入适配器（v0.4 已落地）**。`--source uci` 换用 UCI 公开真实数据集，
+   只替换 sensor_data 的读数与字段映射；四张表结构、维表、告警剧情、其余
+   六个模块一行都不用改。实现见 uci_loader.py，两种源由 init_database 分派。
 
 表结构（见 schema.sql）：site（教室维表）、device（设备维表）、
 sensor_data（监测事实表）、alarm（告警表），另有聚合视图 v_site_air_quality。
@@ -30,6 +31,17 @@ from ..config import DB_PATH, SCHEMA_PATH, ensure_dirs, settings
 # 表白名单：validator 用它判断 SQL 是否引用了不存在的表。
 # 视图也算合法对象，因为评估里允许直接查聚合视图。
 ALLOWED_TABLES = ("site", "device", "sensor_data", "alarm", "v_site_air_quality")
+
+# 维表数据两种数据源共用。放在模块级而不是各自写在 seed() 里，是为了避免
+# 换数据源时教室/设备编号漂移，导致「三表 JOIN」类评估题的答案跟着变。
+SITE_ROWS = (
+    (1, "1号教室", "A栋", 1),
+    (2, "2号教室", "A栋", 2),
+    (3, "3号教室", "B栋", 1),
+    (4, "4号教室", "B栋", 2),
+    (5, "5号教室", "C栋", 3),
+)
+DEVICE_ROWS = tuple((i, i, f"AQ-200{i}", "2026-09-01") for i in range(1, 6))
 
 
 def connect(readonly: bool = True, timeout: int | None = None) -> sqlite3.Connection:
@@ -98,8 +110,8 @@ def create_schema(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def seed(conn: sqlite3.Connection) -> dict[str, int]:
-    """生成 7 天 × 5 个教室 × 每 30 分钟一条的监测数据。
+def seed_synthetic(conn: sqlite3.Connection) -> dict[str, int]:
+    """生成 7 天 × 5 个教室 × 每 30 分钟一条的**合成**监测数据。
 
     Returns:
         各表写入行数的字典，供初始化脚本打印。
@@ -122,15 +134,9 @@ def seed(conn: sqlite3.Connection) -> dict[str, int]:
     start = now - timedelta(days=7)
 
     # 维表：5 个教室，分布在 3 栋楼、3 个楼层，便于构造 GROUP BY 与 JOIN 问题
-    sites = [
-        (1, "1号教室", "A栋", 1),
-        (2, "2号教室", "A栋", 2),
-        (3, "3号教室", "B栋", 1),
-        (4, "4号教室", "B栋", 2),
-        (5, "5号教室", "C栋", 3),
-    ]
+    sites = SITE_ROWS
     # 一个教室一台设备，id 与 site_id 对齐，简化 JOIN 条件
-    devices = [(i, i, f"AQ-200{i}", "2026-09-01") for i in range(1, 6)]
+    devices = DEVICE_ROWS
     conn.executemany("INSERT INTO site VALUES (?,?,?,?)", sites)
     conn.executemany("INSERT INTO device VALUES (?,?,?,?)", devices)
 
@@ -158,46 +164,100 @@ def seed(conn: sqlite3.Connection) -> dict[str, int]:
             rid += 1
     conn.executemany("INSERT INTO sensor_data VALUES (?,?,?,?,?,?,?,?)", rows)
 
+    # 告警剧情抽成共用函数：合成数据与 UCI 真实数据用同一套标准答案，
+    # 这样换数据源后归因题仍然可判定，不用重写评估集。
+    alarm_count = _seed_alarms(conn, now)
+    conn.commit()
+    return {"site": len(sites), "device": len(devices),
+            "sensor_data": len(rows), "alarm": alarm_count}
+
+
+def _seed_alarms(conn: sqlite3.Connection, now: datetime) -> int:
+    """写入告警表并返回条数，两种数据源共用。
+
+    CALIBRATION_DRIFT 是归因题的标准答案；CO2_HIGH 是干扰项，用来检验
+    Agent 会不会只报现象不报原因；其余四条常规告警让「按楼层统计告警数」
+    这类三表 JOIN 题有数据可查。
+    """
     alarms = []
     aid = 1
-    # 3 号教室的两条告警：CALIBRATION_DRIFT 是归因的标准答案，
-    # CO2_HIGH 是干扰项，用来检验 Agent 会不会只报现象不报原因。
     alarms.append((aid, 3, (now - timedelta(days=1, hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
                    "CALIBRATION_DRIFT", "WARN")); aid += 1
     alarms.append((aid, 3, (now - timedelta(hours=20)).strftime("%Y-%m-%d %H:%M:%S"),
                    "CO2_HIGH", "WARN")); aid += 1
-    # 其他设备的常规告警，保证「统计各楼层告警数量」这类 JOIN 题有数据
     for device_id, atype in ((1, "SIGNAL_WEAK"), (2, "OFFLINE"), (4, "BATTERY_LOW"), (5, "SIGNAL_WEAK")):
         alarms.append((aid, device_id, (now - timedelta(days=3, hours=device_id)).strftime("%Y-%m-%d %H:%M:%S"),
                        atype, "INFO")); aid += 1
     conn.executemany("INSERT INTO alarm VALUES (?,?,?,?,?)", alarms)
+    return len(alarms)
+
+
+def seed_uci(conn: sqlite3.Connection) -> dict[str, int]:
+    """用 UCI Occupancy Detection 公开数据集灌库（v0.4）。
+
+    与 seed_synthetic 的唯一差别是 sensor_data 的数值来源；site / device /
+    alarm 三张表完全一致，因此 Schema 检索、SQL 生成、Agent 归因、评估判定
+    一行都不用改——这正是开题报告里「数据接入适配器」要验证的性质。
+
+    Returns:
+        计数信息，额外带 ``uci_records``（解析出的原始记录数），
+        用于论文说明数据规模与抽样比例。
+    """
+    # 局部导入：默认数据源完全不触碰下载/解压代码，离线可复现性不受影响
+    from . import uci_loader
+
+    records = uci_loader.read_records()
+    rows, now = uci_loader.build_rows(records)
+    conn.executemany("INSERT INTO site VALUES (?,?,?,?)", SITE_ROWS)
+    conn.executemany("INSERT INTO device VALUES (?,?,?,?)", DEVICE_ROWS)
+    conn.executemany("INSERT INTO sensor_data VALUES (?,?,?,?,?,?,?,?)", rows)
+    alarm_count = _seed_alarms(conn, now)
     conn.commit()
-    return {"site": len(sites), "device": len(devices), "sensor_data": len(rows), "alarm": len(alarms)}
+    return {"site": len(SITE_ROWS), "device": len(DEVICE_ROWS),
+            "sensor_data": len(rows), "alarm": alarm_count,
+            "uci_records": len(records)}
 
 
-def init_database(force: bool = False) -> dict[str, int]:
-    """一键建库。
+def init_database(force: bool = False, source: str = "synthetic") -> dict[str, int]:
+    """一键建库，支持两种可切换的数据源。
 
     Args:
         force: True 会先删除已有库再重建；False 时若已有数据则直接复用。
+        source: ``synthetic``（默认，固定种子可复现）或 ``uci``（公开真实数据集）。
 
     Returns:
-        计数信息（含 reused 标记）。
+        计数信息，含 ``reused`` 与 ``source`` 标记。
 
     幂等设计：跑多少次都不会重复灌数据，避免评估结果因为数据翻倍而漂移。
+    数据源元信息单独写在 data/db/source.json，与库文件同生共死：
+    force 重建时一并删除，否则页面会显示上一次的数据源，造成误判。
     """
+    from . import uci_loader
+
+    if source not in ("synthetic", "uci"):
+        raise ValueError(f"未知数据源：{source}，只能是 synthetic 或 uci")
     ensure_dirs()
     if force and DB_PATH.exists():
         DB_PATH.unlink()
+        if uci_loader.SOURCE_META.exists():
+            uci_loader.SOURCE_META.unlink()
     conn = connect(readonly=False)  # 只有这里允许写
     try:
         create_schema(conn)
         existing = conn.execute("SELECT COUNT(*) FROM site").fetchone()[0]
         if existing:
-            return {"reused": True, "sensor_data": conn.execute(
+            meta = uci_loader.read_meta()
+            return {"reused": True, "source": meta["source"], "sensor_data": conn.execute(
                 "SELECT COUNT(*) FROM sensor_data").fetchone()[0]}
-        counts = seed(conn)
+        counts = seed_uci(conn) if source == "uci" else seed_synthetic(conn)
+        uci_loader.write_meta(
+            source,
+            rows=counts["sensor_data"],
+            note=("UCI 真实测量值；时间轴平移、5 站点轮转、注入式已知异常；tvoc/pm25 为 NULL"
+                  if source == "uci" else "固定种子 42，含注入式已知异常"),
+        )
         counts["reused"] = False
+        counts["source"] = source
         return counts  # type: ignore[return-value]
     finally:
         conn.close()

@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 data/db/*.db
+data/db/source.json
+data/raw/
 data/reports/*.json
 data/reports/*.jsonl
 .venv/

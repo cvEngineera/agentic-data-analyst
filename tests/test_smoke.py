@@ -80,5 +80,61 @@ class TestBaseline(unittest.TestCase):
         self.assertTrue(res.denied)
 
 
+class TestUciAdapter(unittest.TestCase):
+    """UCI 适配器的纯函数测试（v0.4）。
+
+    刻意只测 resample / build_rows 这类不碰网络的纯函数：CI 里没有数据 zip，
+    也不该为了跑单测去联网下载。完整数据源链路验证交给
+    ``scripts/check_uci.py``，那条是显式执行的运维脚本。
+    """
+
+    @staticmethod
+    def _records(n: int, co2: float = 600.0) -> list[dict]:
+        """构造形状与 UCI 解析结果一致的假记录，数值固定便于断言。"""
+        return [{
+            "date": f"2015-02-02 00:{i % 60:02d}:00",
+            "temperature": 20.0 + i / 1000,
+            "humidity": 30.0,
+            "light": 100.0,
+            "co2": co2,
+        } for i in range(n)]
+
+    def test_resample_keeps_order_and_length(self) -> None:
+        from src.db.uci_loader import resample
+        recs = self._records(200)
+        out = resample(recs, 50)
+        self.assertEqual(len(out), 50)
+        self.assertEqual(out[0]["date"], recs[0]["date"])
+        self.assertEqual(out[-1]["date"], recs[-1]["date"])
+        # 等间隔抽样必须保持时间顺序，否则趋势类问题会变成噪声
+        self.assertEqual([r["temperature"] for r in out],
+                         sorted(r["temperature"] for r in out))
+
+    def test_resample_short_input_returns_all(self) -> None:
+        from src.db.uci_loader import resample
+        recs = self._records(10)
+        self.assertEqual(resample(recs, 50), recs)
+
+    def test_build_rows_shape_nulls_and_injected_anomaly(self) -> None:
+        from datetime import datetime
+        from src.db.uci_loader import EXPECTED_ROWS, build_rows
+        rows, now = build_rows(self._records(4000), now=datetime(2026, 11, 9, 16, 0, 0))
+        self.assertEqual(len(rows), EXPECTED_ROWS)
+        self.assertEqual(now, datetime(2026, 11, 9, 16, 0, 0))
+        # UCI 没有 tvoc/pm25，必须保持 NULL，不能推算填充
+        for r in rows:
+            self.assertIsNone(r[6])
+            self.assertIsNone(r[7])
+        # 3 号教室最近两天应有注入式异常；同一时刻其他教室保持原值
+        # 注入阈值是 now-2days 的精确时刻（16:00），字符串比较必须带时分秒；
+        # 只写日期会把 11-07 当天 00:00–15:30 尚未注入的行也算进来。
+        cutoff = "2026-11-07 16:00:00"
+        recent3 = [r for r in rows if r[1] == 3 and r[2] >= cutoff]
+        recent_other = [r for r in rows if r[1] == 1 and r[2] >= cutoff]
+        self.assertTrue(recent3)
+        self.assertTrue(all(r[5] == 1070.0 for r in recent3))      # 600 + 470
+        self.assertTrue(all(r[5] == 600.0 for r in recent_other))  # 其他教室不受影响
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
