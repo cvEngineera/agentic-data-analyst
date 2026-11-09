@@ -40,7 +40,7 @@ from src.evaluation.ablation import run_ablation  # noqa: E402
 from src.evaluation.runner import evaluate, load_cases  # noqa: E402
 
 WEB_DIR = ROOT / "src" / "web"
-VERSION = "v0.3.2"
+VERSION = "v0.3.3"
 
 
 def _git_text(args: list[str]) -> str:

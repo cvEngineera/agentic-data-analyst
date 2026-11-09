@@ -20,7 +20,7 @@
 ## 一、快速开始
 
 ```bash
-cd bishe-agent
+cd agentic-data-analyst
 python scripts/init_db.py --force          # 建库 + 灌入 7 天合成数据
 python -m src.cli "3号教室昨天的平均温度是多少"
 python -m unittest discover -s tests -v    # 9 个烟雾测试
@@ -53,7 +53,7 @@ python -m src.cli "各教室 CO2 均值排名" --chart                      # �
 ## 二、目录结构
 
 ```
-bishe-agent/
+agentic-data-analyst/
 ├── .env.example              模型与运行参数模板
 ├── requirements.txt          基线必需 + 可选增强依赖
 ├── .github/workflows/
@@ -303,7 +303,8 @@ python scripts/serve.py          # 或 Windows 双击 start_demo.bat
 | v0.2 | 2026-11-07 | 104 条正式集、五种判定口径、五组消融、回归门禁 |
 | v0.3 | 2026-11-08 | 零依赖浏览器演示、版本可视化、Git 迭代历史 |
 | v0.3.1 | 2026-11-08 | 离线也能点：5 个快捷问题的真实结果快照 |
-| **v0.3.2** | **2026-11-08** | **代码变化区自动跟随最新两个 tag** |
+| v0.3.2 | 2026-11-08 | 代码变化区自动跟随最新两个 tag |
+| **v0.3.3** | **2026-11-09** | **本地目录与云端仓库统一为 agentic-data-analyst** |
 
 查看变化：
 

@@ -1,6 +1,6 @@
 """烟雾测试：保证基线链路随时可跑通。
 
-运行：``cd bishe-agent && python -m unittest discover -s tests -v``
+运行：``cd agentic-data-analyst && python -m unittest discover -s tests -v``
 
 九个用例按「从底层到端到端」排列，任何一个挂了都能快速定位是哪一层：
     表结构 / Schema 检索 -> 校验层（危险语句、写操作、正常 SELECT、未知字段）

@@ -21,8 +21,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 # ---- 路径常量 ------------------------------------------------------------
-# 全部用「相对本文件位置」推导，保证把整个 bishe-agent 目录复制到任意盘符都能跑。
-ROOT = Path(__file__).resolve().parents[1]          # 项目根目录 bishe-agent/
+# 全部用「相对本文件位置」推导，保证把整个 agentic-data-analyst 目录复制到任意盘符都能跑。
+ROOT = Path(__file__).resolve().parents[1]          # 项目根目录 agentic-data-analyst/
 DATA_DIR = ROOT / "data"                            # 所有运行时数据的根目录
 DB_DIR = DATA_DIR / "db"                            # SQLite 数据库文件所在目录
 DB_PATH = DB_DIR / "bishe.db"                       # 唯一的业务库文件
