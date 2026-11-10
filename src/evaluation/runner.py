@@ -120,7 +120,15 @@ def evaluate(cases: list[dict]) -> tuple[list[dict], dict]:
     # 是量错了对象。所以评估入口强制把后端切回 sqlite，跑完恢复。
     # 这也解释了论文里那句「评估环境冻结 SQLite，MySQL 只承担部署」。
     saved_backend = settings.db_backend
+    saved_vector = settings.enable_vector_retrieval
+    saved_semantic = settings.enable_semantic_retrieval
     settings.db_backend = "sqlite"
+    # v0.14：演示服务可以带 ENABLE_VECTOR_RETRIEVAL=1 常驻，此时页面上的
+    # /api/eval 直接跑在进程内，若跟着叠向量打分，产出的准确率会和论文
+    # 的 64.6%/23.6% 不是同一个口径。评估环境连检索方式一起冻结，
+    # 与后端冻结是同一个道理；返回前逐个还原，不影响消融的下一组配置。
+    settings.enable_vector_retrieval = False
+    settings.enable_semantic_retrieval = False
 
     # deny_sql 用例要直接考校验层，需要一份字段白名单；整轮只自省一次库，
     # 避免 104 条用例各连一次数据库把耗时统计污染掉。
@@ -216,6 +224,8 @@ def evaluate(cases: list[dict]) -> tuple[list[dict], dict]:
     # 评估期间钉死的后端要在返回前还原，否则 API 进程跑过一次评估后，
     # 后续演示查询会莫名其妙从 MySQL 掉回 SQLite（v0.12 遗留）。
     settings.db_backend = saved_backend
+    settings.enable_vector_retrieval = saved_vector
+    settings.enable_semantic_retrieval = saved_semantic
 
     n = len(cases) or 1  # 防止空测试集除零
     summary = {

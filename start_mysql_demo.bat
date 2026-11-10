@@ -10,6 +10,8 @@ rem
 rem Usage:
 rem   start_mysql_demo.bat         -> MySQL + mock model (offline)
 rem   start_mysql_demo.bat real    -> MySQL + real LLM (needs LLM_API_KEY in .env)
+rem   start_mysql_demo.bat vector  -> also enable pgvector retrieval
+rem   start_mysql_demo.bat real vector -> all features on
 rem
 rem If port 3307 is already up, steps 2-3 are skipped and we just re-migrate.
 
@@ -59,7 +61,10 @@ if errorlevel 1 goto :fail
 
 echo [5/5] Starting FastAPI against MySQL ...
 set "DB_BACKEND=mysql"
-if /i "%~1"=="real" set "LLM_MODE=real"
+for %%a in (%*) do (
+  if /i "%%a"=="real" set "LLM_MODE=real"
+  if /i "%%a"=="vector" set "ENABLE_VECTOR_RETRIEVAL=1"
+)
 echo.
 echo   FastAPI : http://127.0.0.1:8000
 echo   API doc : http://127.0.0.1:8000/docs

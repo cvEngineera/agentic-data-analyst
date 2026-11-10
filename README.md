@@ -3,13 +3,13 @@
 一个面向物联网监测数据的 NL2SQL 分析 Agent：自然语言提问 → 自动生成 SQL → 多步归因 → 可复现的分层评估。
 覆盖室内空气质量场景（教室 / 设备 / 读数 / 告警四表），带危险语句拦截、报错自纠、执行轨迹与图表输出。
 
-**当前版本：v0.13.1（2026-11-10）** —— 演示库为 **UCI Occupancy Detection 公开真实数据集**；**MySQL 已在 3307 独立实例上端到端跑通**（免密码、不碰本机 3306），8000 端口可直接演示 MySQL 后端。正式评估与回归门禁仍固定在合成数据（种子 42）上，评估入口会在非基准数据源上主动拒绝出数字。技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + Vue 3/ECharts 均已实际运行，**仅 pgvector 未端到端跑通**（WSL/Docker 引擎已验证可用，卡在镜像拉取的本机网络，见第九节）；真实模型 3 轮均值 64.6% ± 0.7%。
+**当前版本：v0.14（2026-11-10）** —— 申报表 **9 项技术全部实测在跑**：Python、大模型接口、UCI 数据集、FastAPI、SQLAlchemy、MySQL（3307 独立实例）、LangChain、pgvector（容器 + HNSW 索引）、Vue 3/ECharts。演示库为 UCI 真实数据，8000 端口同时展示 MySQL 后端与 pgvector 检索。正式评估与回归门禁仍固定在合成数据（种子 42）上，评估入口会冻结后端与检索开关，不会因演示配置产出不可比数字；真实模型 3 轮均值 64.6% ± 0.7%。
 
 > **技术栈对照（申报表 9 项 vs 代码实际）**：Python、大模型接口沿用；**UCI 数据集已启用为当前演示库（v0.13）**；
 > FastAPI → `scripts/api.py`，SQLAlchemy → `src/db/orm.py`（模型/引擎）+ `src/db/query.py`（执行，SQLite 与 MySQL 共用），
 > MySQL → `src/db/schema_mysql.sql` + `scripts/setup_mysql.py` + `start_mysql_demo.bat`（v0.13.1 已实测跑通），
 > LangChain → `src/llm/langchain_client.py`，
-> pgvector → `src/schema_retrieval/vector_store.py`，
+> pgvector → `src/schema_retrieval/vector_store.py` + `docker-compose.yml`（v0.14 已实测跑通，pgvector 0.8.7 / HNSW / 5 行 Schema 向量），
 > Vue 3 + ECharts → `src/web/index.html`（依赖 vendor 在 `src/web/vendor/`）。
 > **评估集固定在 SQLite 上跑**，MySQL 只承担演示与部署，原因见 v0.12 的 CHANGELOG。
 > `/api/status` 的 `llm_backend` / `db_driver` / `vector_backend` 报的是**实际生效值**，不是配置值。
@@ -94,12 +94,20 @@ python scripts/setup_mysql.py          # 建库 + 建表 + 导数 + 行数/聚�
 # 脚本会在进程内切到 mysql（v0.13.1 修），不必先改 .env
 ```
 
-启用 pgvector（可选，需 Docker）：
+启用 pgvector（v0.14 已在本机跑通）：
 
 ```bash
 docker compose up -d                   # pgvector/pgvector:pg16，映射到 5433
-python scripts/setup_pgvector.py       # 建扩展 + 建 HNSW 索引 + 写入 Schema 向量
-# 之后可用 ENABLE_VECTOR_RETRIEVAL=1 让检索叠加向量打分（默认关闭以保持评估口径）
+python scripts/setup_pgvector.py       # 建扩展 + 建 HNSW 索引 + 写入 5 张表的向量
+python scripts/setup_pgvector.py --check
+# Windows：start_demo.bat real vector  /  start_mysql_demo.bat real vector
+# 其他平台：ENABLE_VECTOR_RETRIEVAL=1 python scripts/api.py
+```
+
+首次拉镜像需要能访问 Docker Hub（本机 Clash Verge 的 7897 代理已验证可用）；
+镜像本地化后不再依赖网络，容器是 `restart: unless-stopped`，Docker 一启动就自动恢复。
+向量存在同名 volume 里，重启容器不用重建索引。**评估与单测默认关闭该开关**，
+`evaluate()` 会冻结后端与检索方式，所以在服务里点「现跑评估」也不会污染论文数字。
 ```
 
 > 两个「可选」都不会影响主链路：装不上/连不上时自动降级，且降级来源会
@@ -478,7 +486,7 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 | 第 2 增量 ✅ | 2026.11 | 104 条正式集、五种判定口径、五组消融、回归门禁 | 分层报告 + 消融报告 + CI 通过 |
 | 第 3 增量 ✅ | 2026.11 | 接真实模型 + 144 条独立人工标注；接 UCI 数据集；语义检索对照（负结果） | 真实 3 轮均值 64.6% ± 0.7%、UCI 链路 7/7、语义 −6.25pp |
 | 第 4 增量 ✅ | 2026.11 | 五组消融、失败分布分析、目标指标差距分析 | 消融 delta、38 处列不一致等失败归类 |
-| 第 5 增量 ◐ | 2026.11 | FastAPI / LangChain / SQLAlchemy / MySQL（3307 独立实例）/ Vue 3+ECharts 均已跑通；**LangGraph 外部基线、Docker + pgvector 容器未跑通** | 技术栈对照表 + 第九节已知限制 |
+| 第 5 增量 ✅ | 2026.11 | FastAPI / LangChain / SQLAlchemy / MySQL（3307 独立实例）/ pgvector 容器 / Vue 3+ECharts 全部跑通；**LangGraph 外部基线特意未实施**（主运行时为自研，属对照设计） | 技术栈对照表 + 第九节已知限制 |
 | 论文 | 2027.03—05 | 图表、消融分析、失败案例、查重、答辩 | 论文 + PPT |
 
 **每完成一层跑一次 `run_eval.py --cases ... --output ...`，把汇总另存为新的 baseline，
@@ -515,8 +523,9 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 - 没有行列级权限、多租户、实时连库、流式输出；
 - 成本是按字符粗估的，不是真实 Token 计费；
 - 归因目前是模板化的「取数 → 查告警 → 给结论」，不是自由规划；
-- **LangGraph 外部基线未实施；pgvector 容器尚未落地**：`wsl.exe` 的 WorkBuddy 程序黑名单已于 2026-11-10 解除，实测 WSL 3.0.3 与 Docker Desktop 29.8.2 的 Linux 引擎都能正常启动（原有 4 个容器自动恢复），**所以不再是 WSL 的问题**。卡点是镜像拉取：本机 Docker 配的 `127.0.0.1:7897` 代理未运行；改国内镜像源后能取到 manifest，但 blob 被 CDN 鉴权与限速挡住，离线导入大层也超时。pgvector 容器因此未起，**向量检索仍走内存降级**，答辩时不要说 pgvector 已端到端验证；
-- **跑通 pgvector 的最短路径**：启动本机监听 `7897` 的代理软件（Docker Desktop 原本就配好了它），然后 `docker compose up -d` → `python scripts/setup_pgvector.py` → `ENABLE_VECTOR_RETRIEVAL=1` 重启服务。镜像一旦本地化，后续不再依赖网络；
+- **pgvector 已跑通，但它不是神经网络 embedding（v0.14）**：容器 `pgvector/pgvector:pg16` + pgvector 0.8.7 + HNSW 余弦索引，`schema_vectors` 5 行、256 维，检索来源经 `search_or_fallback()` 明确标为 `pgvector`。编码器仍是字符 n-gram + md5 哈希，**不是 BGE / text-embedding**（DeepSeek 无 embedding 接口），语义泛化弱于神经网络；实测它与内存降级算出的分数完全一致（0.2342 / 0.1487 / 0.0965），所以**换 pgvector 不会提升检索准确率**，「上了 pgvector 所以更准」是错的。它的价值在持久化、索引、多进程共享；当前仅 5 张表，内存暴力算 0.5ms 反而更快；
+- **LangGraph 外部基线未实施**：多步归因是自研运行时，SQL 生成走 LangChain，不要混说成 LangGraph；
+- **评估口径冻结（v0.14）**：`evaluate()` 同时钉死 `db_backend=sqlite`、关闭向量/语义检索开关，返回前逐个还原；`run_eval.py` 在非 synthetic 数据源上拒绝出数字（退出码 2）。所以演示服务可以常驻 `ENABLE_VECTOR_RETRIEVAL=1`，论文数字仍是 v0.6 口径；
 
 ---
 
@@ -539,6 +548,9 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 | 单测 | `python -m unittest discover -s tests -v` |
 | 界面（FastAPI，推荐） | `python scripts/api.py` → `http://127.0.0.1:8000`（`/docs` 自动接口文档） |
 | MySQL 后端演示（免密码） | `start_mysql_demo.bat`（独立 3307 实例 + 迁移 + 启动）/ `start_mysql_demo.bat real` |
+| pgvector 容器 | `docker compose up -d` + `python scripts/setup_pgvector.py` |
+| 全功能演示（真实模型 + 向量检索） | `start_mysql_demo.bat real vector`（或 `start_demo.bat real vector`） |
+| 页面直接展开工作台 | `http://127.0.0.1:8000/?workbench=1&q=各教室本月的CO2均值排名` |
 | 界面（零依赖兜底） | `python scripts/serve.py` → `http://127.0.0.1:8765` |
 | 真实模型演示 | `start_demo.bat real`（不改 `.env`，避免污染测试与评估） |
 | 界面（离线快照） | 直接双击 `src/web/index.html`，点快捷问题看预录结果 |

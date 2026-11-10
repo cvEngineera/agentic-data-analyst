@@ -12,6 +12,38 @@ Git 历史从 v0.2 开始记录（v0.1 时期还没建仓库，不伪造历史�
 
 ---
 
+## v0.14 · 2026-11-10 —— pgvector 端到端跑通，申报表 9 项全部落地
+
+**背景**：`wsl.exe` 从 WorkBuddy「安全中心 → 命令安全 → 程序黑名单」移除后，WSL 3.0.3 与 Docker Desktop 29.8.2 引擎都能启动；剩下的唯一缺口是拉镜像需要的本机代理。用户打开 Clash Verge（`mixed-port: 7897`、`enable_system_proxy: true`）后，`docker compose up -d` **30 秒**拉完 `pgvector/pgvector:pg16`。
+
+**做了什么**
+
+1. 起容器（5433），`scripts/setup_pgvector.py` 建 `vector` 扩展、`schema_vectors` 表、HNSW 余弦索引，写入 5 张表的 256 维向量；
+2. `src/web/index.html` 新增 `?workbench=1` 深链，一屏展示后端 / 数据源 / 向量来源与问答结果，便于答辩截图；
+3. **评估防呆**：`evaluate()` 在钉死 `db_backend=sqlite` 之外，再把 `enable_vector_retrieval` / `enable_semantic_retrieval` 关掉、返回前还原。演示服务可以常驻向量开关，页面上的「现跑评估」也不会产出与论文不可比的数字；
+4. `start_demo.bat` / `start_mysql_demo.bat` 支持任意顺序的 `real` / `vector` 参数；
+5. README、CHANGELOG、版本号同步到 v0.14。
+
+**实测数字**
+
+| 项目 | 结果 |
+|---|---|
+| 容器 | `bishe-pgvector` Up (healthy)，`0.0.0.0:5433->5432` |
+| 扩展与索引 | pgvector **0.8.7**，`schema_vectors` **5 行**，HNSW `vector_cosine_ops` |
+| 检索来源 | `search_or_fallback()` 返回 **`pgvector`**（非 memory），top3 分数 0.2342 / 0.1487 / 0.0965 |
+| 与内存降级对比 | 分数**完全一致** —— 同一个编码器、同一份文档、同一个余弦公式，换库不提升准确率 |
+| 状态接口 | 8000 / 8765 均报 `vector_backend: pgvector`；8000 同时 `db_backend=mysql`、`mysql_sensor_rows=1680` |
+| 真实模型问答 | MySQL + pgvector 下 2 步返回 5 行，无错误 |
+| 评估冻结 | 同一库上 vector=off 与 on 均 **34/144**，结束后开关还原 |
+| 回归 | 单测 **27/27**（向量开关打开的环境同样） |
+| 页面 | 无头 Chrome 截图：工作台显示「向量 pgvector」，表格 + ECharts 柱状图正常 |
+
+**诚实边界**：embedding 是字符 n-gram + md5 哈希到 256 维，**不是神经网络 embedding**；DeepSeek 无 embedding 接口，本地跑 BGE 需要几百 MB 模型。pgvector 在这里提供的是持久化 / 索引 / 多进程共享，不是语义能力提升；5 张表规模下内存降级 0.5ms 反而更快。论文「局限性」要照实写，不能说「已接入语义 embedding 模型」。
+
+**口径**：评估与所有准确率数字仍固定 SQLite + synthetic（种子 42）；`ENABLE_VECTOR_RETRIEVAL` 只在演示服务用启动参数开启，`.env` 保持默认关闭。
+
+---
+
 ## v0.13.1 · 2026-11-10 —— MySQL 端到端跑通（不猜 root 密码）
 
 **问题**：本机 3306 的 MySQL 8.0 在跑，但 root 密码未知，迁移脚本因此从未端到端执行过；申报表里的 MySQL 一直停在「代码就绪」。

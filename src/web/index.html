@@ -228,7 +228,7 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
     </div>
     <div class="tb-title">Agentic Data Analyst</div>
     <div class="tb-right">
-      <span class="chip">{{ status ? status.version : 'v0.13.1' }}</span>
+      <span class="chip">{{ status ? status.version : 'v0.14' }}</span>
       <span class="chip" :class="{on: status && status.llm_mode==='real'}">{{ status ? status.llm_mode : 'mock' }}</span>
       <span class="chip" :class="{on: status && status.db_backend==='mysql'}"
             :title="dbTitle">{{ dbBadge }}</span>
@@ -847,7 +847,11 @@ createApp({
     //    才能把「回答 + 图表」的渲染结果截下来检查）。
     (async () => {
       await loadStatus();
-      const pre = new URLSearchParams(location.search).get('q');
+      const qs = new URLSearchParams(location.search);
+      // workbench=1 直接展开工作台：截图/答辩时把「后端、数据源、向量来源」
+      // 和问答结果放在同一屏，不用现场点按钮。
+      if (qs.get('workbench')) { s.panel = 'workbench'; s.drawer = true; }
+      const pre = qs.get('q');
       if (pre) { s.input = pre; await ask(); }
     })();
 
