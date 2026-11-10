@@ -12,7 +12,7 @@ for %%a in (%*) do (
 )
 
 echo ============================================
-echo  agentic-data-analyst v0.14  local demo
+echo  agentic-data-analyst v0.14.1  local demo
 echo  mode      : %LLM_MODE%  | vector: %ENABLE_VECTOR_RETRIEVAL%
 echo  FastAPI   : http://127.0.0.1:8000
 echo  API doc   : http://127.0.0.1:8000/docs

@@ -228,7 +228,7 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
     </div>
     <div class="tb-title">Agentic Data Analyst</div>
     <div class="tb-right">
-      <span class="chip">{{ status ? status.version : 'v0.14' }}</span>
+      <span class="chip">{{ status ? status.version : 'v0.14.1' }}</span>
       <span class="chip" :class="{on: status && status.llm_mode==='real'}">{{ status ? status.llm_mode : 'mock' }}</span>
       <span class="chip" :class="{on: status && status.db_backend==='mysql'}"
             :title="dbTitle">{{ dbBadge }}</span>
@@ -433,7 +433,7 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
         <div><strong>15/15</strong><span>冒烟集（链路）</span></div>
         <div><strong>64.6%</strong><span>真实模型 3 轮均值 ±0.7%</span></div>
         <div><strong>8/8</strong><span>危险语句拦截</span></div>
-        <div><strong>27/27</strong><span>单元测试</span></div>
+        <div><strong>33/33</strong><span>单元测试</span></div>
       </div>
       <div class="notice"><code>LLM_MODE=real</code> 连跑 3 轮：63.9% / 64.6% / 65.3%，均值 <strong>64.6% ± 0.7%</strong>（论文应引用这个）。同口径 mock 基线 23.6%，安全拦截 8/8，消融显示 Schema 检索贡献最大（−7.64pp）。以上均在合成数据（种子 42）上测得。</div>
       <div v-if="status && status.data_source==='uci'" class="notice" style="color:#e0a458">

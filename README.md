@@ -3,7 +3,7 @@
 一个面向物联网监测数据的 NL2SQL 分析 Agent：自然语言提问 → 自动生成 SQL → 多步归因 → 可复现的分层评估。
 覆盖室内空气质量场景（教室 / 设备 / 读数 / 告警四表），带危险语句拦截、报错自纠、执行轨迹与图表输出。
 
-**当前版本：v0.14（2026-11-10）** —— 申报表 **9 项技术全部实测在跑**：Python、大模型接口、UCI 数据集、FastAPI、SQLAlchemy、MySQL（3307 独立实例）、LangChain、pgvector（容器 + HNSW 索引）、Vue 3/ECharts。演示库为 UCI 真实数据，8000 端口同时展示 MySQL 后端与 pgvector 检索。正式评估与回归门禁仍固定在合成数据（种子 42）上，评估入口会冻结后端与检索开关，不会因演示配置产出不可比数字；真实模型 3 轮均值 64.6% ± 0.7%。
+**当前版本：v0.14.1（2026-11-10）** —— 申报表 **9 项技术全部实测在跑**：Python、大模型接口、UCI 数据集、FastAPI、SQLAlchemy、MySQL（3307 独立实例）、LangChain、pgvector（容器 + HNSW 索引）、Vue 3/ECharts。演示库为 UCI 真实数据，8000 端口同时展示 MySQL 后端与 pgvector 检索。正式评估与回归门禁仍固定在合成数据（种子 42）上，评估入口会冻结后端与检索开关，不会因演示配置产出不可比数字；真实模型 3 轮均值 64.6% ± 0.7%。
 
 > **技术栈对照（申报表 9 项 vs 代码实际）**：Python、大模型接口沿用；**UCI 数据集已启用为当前演示库（v0.13）**；
 > FastAPI → `scripts/api.py`，SQLAlchemy → `src/db/orm.py`（模型/引擎）+ `src/db/query.py`（执行，SQLite 与 MySQL 共用），
@@ -35,7 +35,7 @@
 cd agentic-data-analyst
 python scripts/init_db.py --force          # 建库 + 灌入 7 天合成数据
 python -m src.cli "3号教室昨天的平均温度是多少"
-python -m unittest discover -s tests -v    # 27 个单元测试
+python -m unittest discover -s tests -v    # 33 个单元测试（含单行归因回归）
 python scripts/run_eval.py                 # 冒烟集 15 条
 ```
 

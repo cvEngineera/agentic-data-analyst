@@ -20,6 +20,7 @@
 """
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import asdict, dataclass, field
 
@@ -47,6 +48,39 @@ ALARM_SQL = (
     "JOIN site s ON dv.site_id = s.id "
     "WHERE s.name = ? ORDER BY a.ts DESC LIMIT 10;"
 )
+
+# 教室名的形态：既有「3号教室」这种，也有模型改成别名后的中文名。
+_SITE_NAME_RE = re.compile(r"\d+\s*号教室|教室|classroom", re.IGNORECASE)
+
+
+def _pick_top_site(columns: list[str], rows: list[tuple]) -> str:
+    """从首轮结果里挑出「最差/最值得归因」的教室名。
+
+    v0.14.1 之前只认 ``rows[0][0]``，隐含两个假设：教室名在第一列、
+    且是按指标降序排好的多行结果。真实模型常直接写 ``LIMIT 1``，或者把
+    ``AVG(co2)`` 放在第一列，假设就不成立了，归因链路会静默跳过。
+
+    策略：先按列名找（site_name / classroom / name / 教室），再按值找
+    （匹配「N号教室」等形态），都找不到才返回空串。只扫前 5 行，
+    结果集本身有行数上限，开销可忽略。
+    """
+    if not rows:
+        return ""
+    name_idx = None
+    for i, col in enumerate(columns or []):
+        low = str(col).lower()
+        if any(k in low for k in ("site_name", "classroom", "room", "name", "教室")):
+            name_idx = i
+            break
+    if name_idx is not None and name_idx < len(rows[0]):
+        value = rows[0][name_idx]
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    for row in rows[:5]:
+        for value in row:
+            if isinstance(value, str) and _SITE_NAME_RE.search(value):
+                return value.strip()
+    return ""
 
 
 @dataclass
@@ -248,14 +282,14 @@ def run(question: str, mode: str = "auto") -> AgentResult:
     # ---- 步骤 3：发现异常后主动追加查询（这是与普通 Text2SQL 的分水岭）----
     # 普通工具回答「是多少」，这里继续回答「为什么」。
     seen: set[str] = {first.sql}   # 重复查询检测的集合，后续可扩展为调用指纹去重
-    top_site = ""
-    # 第一步 SQL 按指标降序返回，第一行第一列就是最差的教室名
-    if first.rows and isinstance(first.rows[0][0], str):
-        top_site = first.rows[0][0]
-    # 至少两行才谈得上「对比出异常」，单行结果没有归因意义
-    anomaly = len(first.rows) > 1 and _is_analysis(question)
+    top_site = _pick_top_site(first.columns, first.rows)
+    # v0.14.1：不再要求「至少两行」，也不再假设教室名就在第一列。
+    # 真实模型常直接 LIMIT 1 返回最差的一行，或把 AVG(co2) 放在首列；
+    # 此时「最差」本身已是对比结论，单行同样值得追问原因。旧写法会让
+    # 用户问「为什么」只拿到一张表、conclusion 为空（实测复现）。
+    should_attribute = bool(top_site) and _is_analysis(question)
 
-    if anomaly and top_site:
+    if should_attribute:
         t0 = time.perf_counter()
         # 参数化查询：教室名来自上一步结果，绝不拼进 SQL 字符串
         cols, rows, err, _ = execute(ALARM_SQL, (top_site,))
@@ -277,6 +311,13 @@ def run(question: str, mode: str = "auto") -> AgentResult:
         else:
             # 检索不到就明说，不编造原因——对应「幻觉抑制」的设计思想
             result.conclusion = f"{top_site} 指标偏高，但未检索到相关告警记录，建议人工核查。"
+    else:
+        # 没能进入归因也不能静默返回空结论：否则页面上「为什么」看起来
+        # 完全没被回答，只剩一张表。如实说明卡在哪一步。
+        result.conclusion = (
+            f"已返回 {len(first.rows)} 行结果、{len(first.columns)} 个字段；"
+            "结果中未定位到具体教室，无法追加告警查询做归因，"
+            "建议换一种问法（如「各教室 CO2 均值排名」）或人工核查。")
 
     # ---- 步骤 4：结果解读 ------------------------------------------------
     t0 = time.perf_counter()
