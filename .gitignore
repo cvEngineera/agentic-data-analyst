@@ -6,6 +6,8 @@ __pycache__/
 *.py[cod]
 data/db/*.db
 data/db/source.json
+# 本地数据源备份（synthetic / uci 切换时留存）
+data/db/source.*.json
 data/raw/
 data/reports/*.json
 data/reports/*.jsonl

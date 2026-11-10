@@ -207,10 +207,23 @@ def evaluate(cases: list[dict]) -> tuple[list[dict], dict]:
             "conclusion": res.conclusion, "fallback_used": res.fallback_used,
         })
 
+    # 数据源也要随报告一起落盘（v0.13）：144 条用例的预期结果是在
+    # synthetic（固定种子 42）上标定的，换成 UCI 真实数据后数值全变，
+    # 再报一个「准确率」就是自欺欺人。写进汇总，事后能追溯这份数字来自哪个库。
+    from ..db.uci_loader import read_meta  # 局部导入：默认路径不碰数据接入代码
+
+    data_source = read_meta().get("source", "unknown")
+    # 评估期间钉死的后端要在返回前还原，否则 API 进程跑过一次评估后，
+    # 后续演示查询会莫名其妙从 MySQL 掉回 SQLite（v0.12 遗留）。
+    settings.db_backend = saved_backend
+
     n = len(cases) or 1  # 防止空测试集除零
     summary = {
         "timestamp": datetime.now().isoformat(timespec="seconds"),
         "llm_mode": settings.llm_mode,   # 必须记录模式：mock 的数字不能当真实准确率
+        "data_source": data_source,
+        "warning": ("" if data_source == "synthetic" else
+                    "当前库不是 synthetic，本报告的准确率与基线不可比，禁止用于论文或回归门禁"),
         "total": len(cases),
         "passed": sum(1 for d in details if d["passed"]),
         "accuracy": round(sum(1 for d in details if d["passed"]) / n, 4),
@@ -229,10 +242,13 @@ def _print(summary: dict, compare: dict | None = None) -> None:
     delta < -0.1% 就标 REGRESSION，提示这次改动可能把某类问题搞坏了。
     阈值故意留一点余量，避免浮点噪声误报。
     """
-    print(f"\n模式 {summary['llm_mode']} | 共 {summary['total']} 题 | "
+    print(f"\n模式 {summary['llm_mode']} | 数据源 {summary.get('data_source', 'unknown')} | "
+          f"共 {summary['total']} 题 | "
           f"通过 {summary['passed']} | 执行准确率 {summary['accuracy']:.1%}")
     print(f"平均耗时 {summary['avg_elapsed_ms']} ms | 平均步数 {summary['avg_steps']} | "
           f"估算成本 {summary['estimated_cost_yuan']} 元\n")
+    if summary.get("warning"):
+        print(f"⚠ {summary['warning']}\n")
     header = f"{'类别':<16}{'通过':<10}{'准确率':<10}{'对比上次':<12}"
     print(header)
     print("-" * len(header))
@@ -258,7 +274,22 @@ def main() -> None:
     ap.add_argument("--cases", type=Path, default=None, help="测试集 JSONL 路径")
     ap.add_argument("--output", type=Path, default=None, help="汇总输出路径")
     ap.add_argument("--compare", type=Path, default=None, help="与上一次 summary.json 对比")
+    ap.add_argument("--allow-other-source", action="store_true",
+                    help="允许在非 synthetic 数据源上跑（结果不可用于论文/门禁）")
     args = ap.parse_args()
+
+    # 数据源守卫（v0.13）：144 条用例的预期结果是在 synthetic（种子 42）上
+    # 标定的，换成 UCI 真实数据后数值全变。默认直接拒绝，避免演示时把一串
+    # 失败误读成「模型退化」，或把无效数字写进论文。确需只验链路时加开关。
+    from ..db.uci_loader import read_meta  # 局部导入
+
+    source = read_meta().get("source", "unknown")
+    if source != "synthetic" and not args.allow_other_source:
+        print(f"已拒绝：当前数据源为 {source}，不是评估基准 synthetic。\n"
+              "144 条用例的预期结果基于固定种子 42 的合成数据，在此库上统计准确率没有意义。\n"
+              "切回：python scripts/init_db.py --force --source synthetic\n"
+              "仅验链路：python scripts/run_eval.py --allow-other-source（数字不可引用）")
+        raise SystemExit(2)
 
     ensure_dirs()
     cases = load_cases(args.cases)

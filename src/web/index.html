@@ -228,10 +228,12 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
     </div>
     <div class="tb-title">Agentic Data Analyst</div>
     <div class="tb-right">
-      <span class="chip">{{ status ? status.version : 'v0.12' }}</span>
+      <span class="chip">{{ status ? status.version : 'v0.13' }}</span>
       <span class="chip" :class="{on: status && status.llm_mode==='real'}">{{ status ? status.llm_mode : 'mock' }}</span>
       <span class="chip" :class="{on: status && status.db_backend==='mysql'}"
             :title="dbTitle">{{ dbBadge }}</span>
+      <span class="chip" :class="{on: status && status.data_source==='uci'}"
+            :title="srcTitle">{{ srcBadge }}</span>
       <button class="tb-btn" @click="drawer=true">工作台</button>
     </div>
   </div>
@@ -411,10 +413,14 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
       <div class="muted" v-if="status">
         <div>版本 <b>{{ status.version }}</b> · 模型 <b>{{ llmText }}</b> ·
           数据库 <b>{{ status.db_backend }}</b>（{{ status.db_driver }}） · 向量 <b>{{ status.vector_backend }}</b></div>
-        <div style="margin-top:5px">监测数据 <b>{{ status.sensor_rows }}</b> 行
+        <div style="margin-top:5px">监测数据 <b>{{ status.sensor_rows }}</b> 行（{{ srcBadge }}）
           <span v-if="status.mysql_sensor_rows !== null"> · MySQL <b>{{ status.mysql_sensor_rows }}</b> 行</span>
           · 冒烟集 <b>{{ status.cases_smoke }}</b> 条 · 正式集 <b>{{ status.cases_full }}</b> 条 · 报告 <b>{{ status.reports.length }}</b> 份</div>
         <div style="margin-top:6px;color:var(--faint)">{{ status.dataset }}<span v-if="status.data_note"> · {{ status.data_note }}</span></div>
+        <div v-if="status.data_source==='uci'" style="margin-top:6px;color:#e0a458">
+          当前为 UCI 真实数据演示库；144 条正式评估集在合成数据（种子 42）上标定，此处不出准确率。
+          切回命令：python scripts/init_db.py --force --source synthetic
+        </div>
       </div>
       <div class="muted" v-else>
         服务未启动，无法读取数据源元信息。运行 <code>python scripts/api.py</code> 后刷新。
@@ -429,7 +435,10 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
         <div><strong>8/8</strong><span>危险语句拦截</span></div>
         <div><strong>27/27</strong><span>单元测试</span></div>
       </div>
-      <div class="notice"><code>LLM_MODE=real</code> 连跑 3 轮：63.9% / 64.6% / 65.3%，均值 <strong>64.6% ± 0.7%</strong>（论文应引用这个）。同口径 mock 基线 23.6%，安全拦截 8/8，消融显示 Schema 检索贡献最大（−7.64pp）。</div>
+      <div class="notice"><code>LLM_MODE=real</code> 连跑 3 轮：63.9% / 64.6% / 65.3%，均值 <strong>64.6% ± 0.7%</strong>（论文应引用这个）。同口径 mock 基线 23.6%，安全拦截 8/8，消融显示 Schema 检索贡献最大（−7.64pp）。以上均在合成数据（种子 42）上测得。</div>
+      <div v-if="status && status.data_source==='uci'" class="notice" style="color:#e0a458">
+        当前演示库是 UCI 真实数据：上面是合成数据口径的历史结论，实时跑出的结果不能与它们比较；正式评估需先切回 synthetic。
+      </div>
       <button class="dbtn" :disabled="busyEval" @click="runEval">{{ busyEval ? '评估中…' : '现跑冒烟评估' }}</button>
       <button class="dbtn" :disabled="busyAbl" @click="runAblation">{{ busyAbl ? '消融中…' : '现跑五组消融' }}</button>
       <pre v-if="evalOut">{{ evalOut }}</pre>
@@ -757,7 +766,11 @@ createApp({
     async function runEval() {
       s.busyEval = true; s.evalOut = '运行中…';
       const r = await api('/api/eval');
-      s.evalOut = r ? JSON.stringify(r, null, 2) : '（服务未启动）';
+      // 非 synthetic 库上跑出的准确率与基线不可比，把警告顶在最前面，
+      // 别让人只看见 JSON 里的 100% 就当成果写进论文。
+      s.evalOut = r
+        ? (r.warning ? `⚠ ${r.warning}\n\n` : '') + JSON.stringify(r, null, 2)
+        : '（服务未启动）';
       s.busyEval = false;
     }
     async function runAblation() {
@@ -780,7 +793,8 @@ createApp({
     const statusText = computed(() => {
       if (!s.status) return '静态快照（未启动服务）· 示例问题可离线查看';
       const st = s.status;
-      return `数据库 ${st.db_backend}（${st.db_driver}） · ${st.sensor_rows} 行监测数据 · ` +
+      return `数据库 ${st.db_backend}（${st.db_driver}） · ` +
+             `${st.data_source === 'uci' ? 'UCI 真实' : '合成'}数据 ${st.sensor_rows} 行 · ` +
              `冒烟 ${st.cases_smoke} / 正式 ${st.cases_full} 条 · ${st.reports.length} 份报告`;
     });
     const onlineTip = computed(() => s.online ? '实时模式 · 任意问题都会查库' : '离线快照模式：示例问题可查看预录结果');
@@ -797,6 +811,18 @@ createApp({
       if (!st) return '数据库后端';
       if (st.mysql_sensor_rows !== null && st.mysql_sensor_rows >= 0) return `MySQL 中 ${st.mysql_sensor_rows} 行`;
       return `${st.db_backend} · 驱动 ${st.db_driver} · 只读`;
+    });
+    // 数据源徽章（v0.13）：换到 UCI 真实数据后必须一眼可见，
+    // 否则「同一句问题答案变了」会被误当成模型不稳定。
+    const srcBadge = computed(() => {
+      const st = s.status;
+      if (!st) return '数据源';
+      return st.data_source === 'uci' ? 'UCI' : '合成';
+    });
+    const srcTitle = computed(() => {
+      const st = s.status;
+      if (!st) return '数据源未知';
+      return [st.dataset || st.data_source, st.data_note].filter(Boolean).join(' · ');
     });
 
     /* ── 快捷键 ─────────────────────────────────────────────── */
@@ -831,6 +857,7 @@ createApp({
       // 变成 ref，模板里自动解包，双向绑定才成立。
       ...toRefs(s), threadEl,
       filteredSessions, statusText, onlineTip, llmText, dbBadge, dbTitle,
+      srcBadge, srcTitle,
       ask, quickAsk, newSession, openSession, delSession, runEval, runAblation, copy,
     };
   },

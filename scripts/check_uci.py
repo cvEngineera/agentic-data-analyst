@@ -1,4 +1,4 @@
-"""UCI 数据源核心链路验证：``python scripts/check_uci.py``
+"""UCI 数据源核心链路验证：``python scripts/check_uci.py [--keep-uci]``
 
 为什么单独写这个脚本，而不是直接跑正式评估集
 --------------------------------------------
@@ -7,17 +7,23 @@ UCI 数据集没有 tvoc / pm25 两个指标，这两列在 UCI 模式下是 NUL
 会变得好看但没有意义。因此这里只验证「真实数据接进来以后，核心链路还通不通」，
 输出一份独立报告；**正式评估与回归门禁始终基于可复现的 synthetic 数据源**。
 
-验证完自动把数据库恢复成 synthetic
-----------------------------------
-脚本会强制重建库两次（切到 uci、再切回来），所以执行后系统状态与执行前
-一致，不会让后续的评估/门禁跑在错误的数据源上。即使中途出错，finally
-里也会恢复——这比留一个「跑完记得手动切回来」的口头约定可靠。
+两种收尾行为
+------------
+默认（不加参数）：验证完自动把数据库恢复成 synthetic。脚本会强制重建库
+两次（切到 uci、再切回来），所以执行后系统状态与执行前一致，不会让后续的
+评估/门禁跑在错误的数据源上。即使中途出错，finally 里也会恢复——这比留一个
+「跑完记得手动切回来」的口头约定可靠。
+
+``--keep-uci``（v0.13）：只切一次，验证后**保留 UCI 作为当前演示数据源**，
+供论文截图、真实数据问答演示使用。此时不要再跑正式评估集出准确率——
+``run_eval.py`` 会主动拒绝在非 synthetic 数据源上产出论文数字。
 
 报告写到 data/reports/uci_check.json，可直接作为论文「数据集与预处理」
 一节的实验依据（含原始记录数、真实值范围、NULL 列说明、链路检查结果）。
 """
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from datetime import datetime
@@ -37,8 +43,14 @@ def _check(name: str, ok: bool, detail: str) -> dict:
 
 
 def main() -> None:
+    ap = argparse.ArgumentParser(description="UCI 数据源核心链路验证")
+    ap.add_argument("--keep-uci", action="store_true",
+                    help="验证后保留 UCI 数据源（默认恢复 synthetic）")
+    args = ap.parse_args()
+    keep = args.keep_uci
+
     original = read_meta().get("source", "synthetic")
-    print(f"执行前数据源：{original}")
+    print(f"执行前数据源：{original} | 收尾方式：{'保留 UCI' if keep else '恢复 synthetic'}")
     checks: list[dict] = []
     stats: dict = {}
 
@@ -107,18 +119,26 @@ def main() -> None:
         ))
 
     finally:
-        # 无论上面是否抛异常，都必须把库恢复成默认可复现数据源
-        print("\n=== 恢复默认数据源 synthetic ===")
-        back = init_database(force=True, source="synthetic")
-        print(f"  已恢复：{back}")
+        if keep:
+            # 演示模式：留着 UCI 库给页面和论文截图用。恢复命令见 README 第六节。
+            print("\n=== 保留 UCI 数据源（--keep-uci）===")
+        else:
+            # 无论上面是否抛异常，都必须把库恢复成默认可复现数据源
+            print("\n=== 恢复默认数据源 synthetic ===")
+            back = init_database(force=True, source="synthetic")
+            print(f"  已恢复：{back}")
 
     passed = sum(1 for c in checks if c["ok"])
+    final_source = read_meta().get("source", "unknown")
     report = {
         "dataset": "UCI Occupancy Detection (id=357)",
         "checked_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "passed": passed, "total": len(checks),
         "stats": stats, "checks": checks,
-        "note": "正式评估集与回归门禁仍基于 synthetic；UCI 模式 tvoc/pm25 为 NULL。",
+        "data_source_after": final_source,
+        "note": ("正式评估集与回归门禁仍基于 synthetic；UCI 模式 tvoc/pm25 为 NULL。"
+                 + (" 本次以 --keep-uci 收尾，当前演示库为 UCI；切回命令见 README 第六节。"
+                    if keep else "")),
     }
     ensure_dirs()
     out = REPORT_DIR / "uci_check.json"
@@ -127,7 +147,8 @@ def main() -> None:
     print(f"\n=== 结果 {passed}/{len(checks)} ===")
     for c in checks:
         print(f"  [{'OK' if c['ok'] else 'FAIL'}] {c['name']}: {c['detail']}")
-    print(f"\n报告：{out}")
+    print(f"\n结束后数据源：{final_source}")
+    print(f"报告：{out}")
     sys.exit(0 if passed == len(checks) else 1)
 
 

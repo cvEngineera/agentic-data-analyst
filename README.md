@@ -3,9 +3,9 @@
 一个面向物联网监测数据的 NL2SQL 分析 Agent：自然语言提问 → 自动生成 SQL → 多步归因 → 可复现的分层评估。
 覆盖室内空气质量场景（教室 / 设备 / 读数 / 告警四表），带危险语句拦截、报错自纠、执行轨迹与图表输出。
 
-**当前版本：v0.12.1（2026-11-09）** —— 技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + pgvector + Vue 3/ECharts 全部接入代码路径（其中 **MySQL 与 pgvector 受本机环境限制未端到端跑通**，见第九节）；SQLAlchemy 已进入 **默认 SQLite 执行路径**（装不上时降级回 `sqlite3`，状态接口如实上报用了哪个）；真实模型 3 轮均值 64.6% ± 0.7%。
+**当前版本：v0.13（2026-11-10）** —— 当前演示库已切换为 **UCI Occupancy Detection 公开真实数据集**（20560 条原始记录抽样 1680 行）；正式评估与回归门禁仍固定在合成数据（种子 42）上，v0.13 起评估入口会在非基准数据源上主动拒绝出数字。技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + pgvector + Vue 3/ECharts 全部接入代码路径（其中 **MySQL 与 pgvector 受本机环境限制未端到端跑通**，见第九节）；真实模型 3 轮均值 64.6% ± 0.7%。
 
-> **技术栈对照（申报表 9 项 vs 代码实际）**：Python、大模型接口、UCI 数据集沿用；
+> **技术栈对照（申报表 9 项 vs 代码实际）**：Python、大模型接口沿用；**UCI 数据集已启用为当前演示库（v0.13）**；
 > FastAPI → `scripts/api.py`，SQLAlchemy → `src/db/orm.py`（模型/引擎）+ `src/db/query.py`（执行，SQLite 与 MySQL 共用），
 > MySQL → `src/db/schema_mysql.sql` + `scripts/setup_mysql.py`，
 > LangChain → `src/llm/langchain_client.py`，
@@ -392,18 +392,33 @@ full 组 64.6% 正好落在均值上，v0.6 报的 65.3% 是单轮最高值，�
 
 ---
 
-## 六、换成 UCI 公开数据集
+## 六、UCI 公开数据集（v0.13 起为当前演示库）
 
-默认数据源 `synthetic`：`src/db/core.py::seed_synthetic()` 用固定种子 42 生成
+**当前状态**：`data/db/source.json` = `uci`，演示库用的是 UCI Occupancy Detection
+（id=357）真实测量值。`tvoc` / `pm25` 两列为 NULL（数据集无此指标，不编造）。
+
+另一套数据源 `synthetic`：`src/db/core.py::seed_synthetic()` 用固定种子 42 生成
 5 个教室 × 7 天 × 每 30 分钟（1680 行），并注入已知异常：**3 号教室最近两天
-CO2 偏高 + 一条 CALIBRATION_DRIFT 告警**，用于演示多步归因。
-
-切换真实公开数据集（v0.4 已实现）：
+CO2 偏高 + 一条 CALIBRATION_DRIFT 告警**，用于演示多步归因。144 条正式评估集、
+五组消融、回归门禁全部在它上面标定。
 
 ```bash
-python scripts/init_db.py --force --source uci    # UCI Occupancy Detection，20560 条
-python scripts/check_uci.py                       # 7 项验证，跑完自动恢复 synthetic
+# 切到 UCI 并保留（7 项链路验证，报告写 data/reports/uci_check.json）
+python scripts/check_uci.py --keep-uci
+
+# 切回评估基准（论文 / 门禁 / 复现实验前必做）
+python scripts/init_db.py --force --source synthetic
+
+# 只验证 UCI 链路、跑完自动恢复 synthetic（CI / 日常回归用）
+python scripts/check_uci.py
 ```
+
+**v0.13 的数据源防呆**：`python scripts/run_eval.py` 检测到当前库不是
+`synthetic` 会直接退出（退出码 2），不会产出一串与基线不可比的准确率；
+确需只验链路时加 `--allow-other-source`，汇总里会带 `data_source` 与
+`warning`。页面右上角有 `UCI / 合成` 徽章，工作台会提示当前数字口径。
+切换前已把原来的合成库备份为 `data/db/bishe.synthetic.db`（本地文件，不入库），
+也可用上面的命令重建，二者数值一致。
 
 `src/db/uci_loader.py` 负责下载、解析与字段映射；四张表结构与其余六个模块
 一行都不用改——这就是开题报告里写的数据接入适配器设计。
@@ -451,9 +466,9 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 |---|---|---|---|
 | 基线 ✅ | 2026.11 | 一句话进、结果出；七个模块骨架；分层评估可跑 | `unittest` 9/9 + 冒烟集 15/15 |
 | 第 2 增量 ✅ | 2026.11 | 104 条正式集、五种判定口径、五组消融、回归门禁 | 分层报告 + 消融报告 + CI 通过 |
-| 第 3 增量 ⏳ | 2026.12 | **接真实模型 + 人工重标标准 SQL**；接 UCI 数据集；Chroma 语义检索 | 真实准确率数字 + 混合检索对比表 |
-| 第 4 增量 | 2027.01 | 重排、语义检索消融、真实模式下的自纠错实验 | 每个模块贡献多少个百分点 |
-| 第 5 增量 | 2027.02 | LangGraph 外部基线；FastAPI 包装；Docker 化；Streamlit 界面 | 对比数据表 + 在线 demo |
+| 第 3 增量 ✅ | 2026.11 | 接真实模型 + 144 条独立人工标注；接 UCI 数据集；语义检索对照（负结果） | 真实 3 轮均值 64.6% ± 0.7%、UCI 链路 7/7、语义 −6.25pp |
+| 第 4 增量 ✅ | 2026.11 | 五组消融、失败分布分析、目标指标差距分析 | 消融 delta、38 处列不一致等失败归类 |
+| 第 5 增量 ◐ | 2026.11 | FastAPI / LangChain / SQLAlchemy / Vue 3+ECharts 已落地；**LangGraph 外部基线、Docker + pgvector 容器未跑通** | 技术栈对照表 + 第九节已知限制 |
 | 论文 | 2027.03—05 | 图表、消融分析、失败案例、查重、答辩 | 论文 + PPT |
 
 **每完成一层跑一次 `run_eval.py --cases ... --output ...`，把汇总另存为新的 baseline，
@@ -475,6 +490,7 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 
 ## 九、已知限制（别在答辩时含糊）
 
+- **当前演示库是 UCI 真实数据，不是评估基准（v0.13）**：论文里所有准确率、消融 delta、失败分布均在合成数据（种子 42）上测得；UCI 库只用于演示与「数据来源」一章。`run_eval.py` 在非 synthetic 上默认拒绝（退出码 2），`/api/eval` 返回带 `warning`，切回命令见第六节；
 - **mock 模式的准确率没有学术意义**，只验证链路；同口径 mock 基线 23.6%，真实模型 3 轮均值 64.6% ± 0.7%（见 5.1 节）；
 - 标准答案已独立人工标注（v0.4.1），数值比对按标准 SQL 的 `ROUND(...,2)` 精度给 0.01 容差（v0.6）；语义判定未放宽；
 - 真实模型下消融 delta 非零，最大贡献来自 Schema 检索（−7.64pp）；
@@ -497,21 +513,24 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 
 | 目的 | 命令 |
 |---|---|
-| 重建数据库 | `python scripts/init_db.py --force` |
+| 重建数据库（切回评估基准 synthetic） | `python scripts/init_db.py --force --source synthetic` |
+| 切到 UCI 真实数据（当前演示库） | `python scripts/init_db.py --force --source uci` |
+| UCI 链路 7 项验证 | `python scripts/check_uci.py`（自动切回）/ `--keep-uci`（保留 UCI） |
 | 单轮查询 | `python -m src.cli "问题"` |
 | 多步归因 | `python -m src.cli "问题" --mode agent --show-trace` |
 | JSON 输出 | `python -m src.cli "问题" --json` |
 | 强制真实模型 | `python -m src.cli "问题" --llm real` |
-| 冒烟评估（15 条） | `python scripts/run_eval.py` |
+| 冒烟评估（15 条） | `python scripts/run_eval.py`（需先切回 synthetic，否则退出码 2） |
 | 生成正式评估集 | `python scripts/build_eval_cases.py` |
 | 正式评估（144 条） | `python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl --output data/reports/eval_summary_full.json` |
 | 回归对比 | `python scripts/run_eval.py --cases src/evaluation/cases_eval.jsonl --output data/reports/ci_summary.json --compare eval/baseline_summary.json` |
 | 消融实验 | `python scripts/run_ablation.py` |
 | 单测 | `python -m unittest discover -s tests -v` |
-| 界面（零依赖，推荐） | `python scripts/serve.py` → 打开 `http://127.0.0.1:8765` |
+| 界面（FastAPI，推荐） | `python scripts/api.py` → `http://127.0.0.1:8000`（`/docs` 自动接口文档） |
+| 界面（零依赖兜底） | `python scripts/serve.py` → `http://127.0.0.1:8765` |
+| 真实模型演示 | `start_demo.bat real`（不改 `.env`，避免污染测试与评估） |
 | 界面（离线快照） | 直接双击 `src/web/index.html`，点快捷问题看预录结果 |
 | 刷新离线快照 | `python scripts/build_snapshots.py`（改了运行时逻辑后重跑） |
-| 界面（可选） | `streamlit run src/app.py` |
 
 ---
 
@@ -564,26 +583,27 @@ v0.9 起界面按 Chat2DB 桌面客户端的版式组织：顶部居中标题栏
 | v0.10 | 2026-11-09 | 意图闸门：非数据问题不生成 SQL、不查库 |
 | **v0.11** | **2026-11-09** | **结果页真正出图：纯 SVG 柱状/折线/饼图，零依赖** |
 
-### 数据源切换（v0.4）
+### 数据源切换（v0.4 实现，v0.13 起当前演示库为 uci）
 
 ```bash
-python scripts/init_db.py --force                  # 默认 synthetic，固定种子 42，可复现
-python scripts/init_db.py --force --source uci    # UCI 公开真实数据（首次下载约 328KB）
-python scripts/check_uci.py                       # 验证 UCI 链路 7 项，跑完自动恢复 synthetic
+python scripts/check_uci.py --keep-uci            # 切到 UCI + 7 项验证 + 保留（当前状态）
+python scripts/init_db.py --force --source synthetic  # 切回评估基准，论文/门禁前必做
+python scripts/check_uci.py                       # 只验 UCI 链路，跑完自动恢复 synthetic
 ```
 
-| | synthetic（默认） | uci |
+| | synthetic（评估基准） | uci（当前演示库） |
 |---|---|---|
-| 数值来源 | 固定种子合成 | UCI Occupancy Detection，20560 条抽样到 1680 行 |
-| 用途 | 正式评估集、回归门禁、离线复现 | 验证数据接入适配器、论文数据来源 |
+| 数值来源 | 固定种子 42 合成 | UCI Occupancy Detection，20560 条抽样到 1680 行 |
+| 用途 | 144 条正式评估集、五组消融、回归门禁、离线复现 | 演示、数据接入适配器验证、论文数据来源 |
 | tvoc / pm25 | 有值 | **NULL**（数据集无此指标，不编造） |
 
 UCI 模式的三处预处理：表头缺列按位置解析；2015 年时间轴平移到最近 7 天；
 单房间数据轮转分配到 5 个虚拟教室，并注入式保留 3 号教室的已知异常，
-供归因链路判定。页面状态栏显示当前数据源，悬停可看数据集全称与说明。
+供归因链路判定。页面右上角显示 `UCI / 合成` 徽章，悬停可看数据集全称与说明。
 
-**正式准确率只在 synthetic 上统计**，UCI 模式只验证链路，两种口径不混用——
-否则「跳过不适用的题」会让数字好看但失去意义。
+**正式准确率只在 synthetic 上统计**。v0.13 起 `run_eval.py` 在非基准源上
+直接拒绝（退出码 2），`--allow-other-source` 只用于验链路、汇总带 `warning`；
+两种口径不混用，否则「跳过不适用的题」会让数字好看但失去意义。
 
 查看变化：
 
