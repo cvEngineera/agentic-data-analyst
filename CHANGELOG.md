@@ -41,7 +41,18 @@ Git 历史从 v0.2 开始记录（v0.1 时期还没建仓库，不伪造历史�
 
 **口径**：评估与所有准确率数字仍固定 SQLite + synthetic（种子 42）；MySQL 只承担演示/部署。3307 是新建的独立实例，不是本机原有的 3306。
 
-**已知限制**：pgvector 仍未端到端跑通（`wsl.exe` 被 WorkBuddy「命令安全 → 程序黑名单」拦截，Docker Linux 引擎起不来）；LangGraph 外部基线未实施。
+**已知限制**：pgvector 仍未端到端跑通；LangGraph 外部基线未实施。
+
+### 后续环境排查（2026-11-10 晚，未改代码）
+
+用户把 `wsl.exe` 从 WorkBuddy「安全中心 → 命令安全 → 程序黑名单」移除后重新验证：
+
+- `wsl --status` 可执行：WSL 3.0.3.0、内核 6.18.54.1-1、默认发行版 `docker-desktop`（WSL 2）；`wsl -d docker-desktop -- echo` 成功；
+- Docker Desktop 首次启动报 `rename <HOME>\.docker\daemon.json.tmp-... -> daemon.json: Access is denied`。文件 ACL、只读属性、Defender 受控文件夹访问均正常，最小复现里原子替换也成功 → 判定为工具链启动的进程覆盖用户主目录已有文件被挡。把 `USERPROFILE` / `HOME` 指到 `E:\tmp\docker-home` 后引擎正常启动，**ServerVersion 29.8.2**，原有 4 个容器（redis / rabbitmq / nginx / mysql:5.7）自动恢复；
+- 镜像拉取仍失败：先报代理 `127.0.0.1:7897` 连接被拒；改系统代理 + 国内镜像源（daocloud / 1ms.run）后能取 manifest、blob 卡住；离线导入脚本（Registry v2 API 手工取 config + layers 再 `docker load`）能拿到 token、index、config，但大层经签名 CDN 下载超时（curl exit 28）；
+- 已把 `settings-store.json` 恢复为用户原始配置（manual + `127.0.0.1:7897`），备份留在 `E:\tmp\docker-home\settings-store.json.bak`；临时归档已清理。项目服务未受影响：8000 仍是 MySQL 后端、8765 是 SQLite 兜底。
+
+**结论**：WSL / Docker 引擎链路已通，唯一缺口是本机代理未开导致镜像下不下来。启动 7897 代理后按 README 第九节的「最短路径」三条命令即可补齐，代码无需改动。
 
 ---
 

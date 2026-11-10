@@ -3,7 +3,7 @@
 一个面向物联网监测数据的 NL2SQL 分析 Agent：自然语言提问 → 自动生成 SQL → 多步归因 → 可复现的分层评估。
 覆盖室内空气质量场景（教室 / 设备 / 读数 / 告警四表），带危险语句拦截、报错自纠、执行轨迹与图表输出。
 
-**当前版本：v0.13.1（2026-11-10）** —— 演示库为 **UCI Occupancy Detection 公开真实数据集**；**MySQL 已在 3307 独立实例上端到端跑通**（免密码、不碰本机 3306），8000 端口可直接演示 MySQL 后端。正式评估与回归门禁仍固定在合成数据（种子 42）上，评估入口会在非基准数据源上主动拒绝出数字。技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + Vue 3/ECharts 均已实际运行，**仅 pgvector 受 WorkBuddy 命令安全策略阻挡 WSL/Docker 未端到端跑通**（见第九节）；真实模型 3 轮均值 64.6% ± 0.7%。
+**当前版本：v0.13.1（2026-11-10）** —— 演示库为 **UCI Occupancy Detection 公开真实数据集**；**MySQL 已在 3307 独立实例上端到端跑通**（免密码、不碰本机 3306），8000 端口可直接演示 MySQL 后端。正式评估与回归门禁仍固定在合成数据（种子 42）上，评估入口会在非基准数据源上主动拒绝出数字。技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + Vue 3/ECharts 均已实际运行，**仅 pgvector 未端到端跑通**（WSL/Docker 引擎已验证可用，卡在镜像拉取的本机网络，见第九节）；真实模型 3 轮均值 64.6% ± 0.7%。
 
 > **技术栈对照（申报表 9 项 vs 代码实际）**：Python、大模型接口沿用；**UCI 数据集已启用为当前演示库（v0.13）**；
 > FastAPI → `scripts/api.py`，SQLAlchemy → `src/db/orm.py`（模型/引擎）+ `src/db/query.py`（执行，SQLite 与 MySQL 共用），
@@ -515,7 +515,8 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 - 没有行列级权限、多租户、实时连库、流式输出；
 - 成本是按字符粗估的，不是真实 Token 计费；
 - 归因目前是模板化的「取数 → 查告警 → 给结论」，不是自由规划；
-- **LangGraph 外部基线、Docker / pgvector 容器尚未落地**：`wsl.exe` 被 WorkBuddy「安全中心 → 命令安全 → 程序黑名单」拦截（不是 Windows Defender，也不是第三方杀软），Docker 的 Linux 引擎起不来；MySQL 已跑通，**向量检索仍走内存降级**，答辩时不要说 pgvector 已端到端验证；
+- **LangGraph 外部基线未实施；pgvector 容器尚未落地**：`wsl.exe` 的 WorkBuddy 程序黑名单已于 2026-11-10 解除，实测 WSL 3.0.3 与 Docker Desktop 29.8.2 的 Linux 引擎都能正常启动（原有 4 个容器自动恢复），**所以不再是 WSL 的问题**。卡点是镜像拉取：本机 Docker 配的 `127.0.0.1:7897` 代理未运行；改国内镜像源后能取到 manifest，但 blob 被 CDN 鉴权与限速挡住，离线导入大层也超时。pgvector 容器因此未起，**向量检索仍走内存降级**，答辩时不要说 pgvector 已端到端验证；
+- **跑通 pgvector 的最短路径**：启动本机监听 `7897` 的代理软件（Docker Desktop 原本就配好了它），然后 `docker compose up -d` → `python scripts/setup_pgvector.py` → `ENABLE_VECTOR_RETRIEVAL=1` 重启服务。镜像一旦本地化，后续不再依赖网络；
 
 ---
 
