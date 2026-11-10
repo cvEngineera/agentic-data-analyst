@@ -126,6 +126,29 @@ def _record(trace: list[dict], step: int, action: str, params: dict,
                   "elapsed_ms": round(elapsed_ms, 2), "sql": sql})
 
 
+def _schema_info() -> dict[str, list[str]]:
+    """按当前后端自省表结构，返回 ``{对象名: [列名]}``。
+
+    v0.13.1 新增：MySQL 演示链路不能再去读 SQLite 的 ``sqlite_master``。
+    只切执行层、不切元数据层，会出现「库结构一改，候选表和字段白名单
+    还停在旧 SQLite 文件上」这种隐蔽的不一致，也让「MySQL 真的在跑」
+    这句话站不住。SQLAlchemy 的 Inspector 对两个后端都成立，正好复用
+    ``db/orm.py`` 里已有的反射实现。
+
+    评估链路强制 ``db_backend="sqlite"``，仍走原来的 ``core.introspect()``，
+    口径与历史数字完全不变。
+    """
+    if settings.db_backend == "mysql":
+        from ..db.orm import reflect_schema  # 局部导入：默认路径不加载 MySQL 驱动
+
+        return reflect_schema()
+    conn = connect(readonly=True)
+    try:
+        return introspect(conn)
+    finally:
+        conn.close()
+
+
 def run(question: str, mode: str = "auto") -> AgentResult:
     """执行一次任务。
 
@@ -169,12 +192,8 @@ def run(question: str, mode: str = "auto") -> AgentResult:
         return gated
 
     # 先自省真实库：候选表清单与字段白名单都从这里来，换数据集自动适配
-    conn = connect(readonly=True)
-    try:
-        schema_info = introspect(conn)
-        available = list(schema_info.keys())
-    finally:
-        conn.close()
+    schema_info = _schema_info()
+    available = list(schema_info.keys())
 
     # 模式选择：分析型问题才进多步，其余走单轮（省成本、省延迟）
     chosen = "agent" if mode == "agent" or (mode == "auto" and _is_analysis(question)) else "single"

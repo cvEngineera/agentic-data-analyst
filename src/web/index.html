@@ -228,7 +228,7 @@ section h3{font-size:12.5px;margin:0 0 10px;color:var(--accent2);font-weight:600
     </div>
     <div class="tb-title">Agentic Data Analyst</div>
     <div class="tb-right">
-      <span class="chip">{{ status ? status.version : 'v0.13' }}</span>
+      <span class="chip">{{ status ? status.version : 'v0.13.1' }}</span>
       <span class="chip" :class="{on: status && status.llm_mode==='real'}">{{ status ? status.llm_mode : 'mock' }}</span>
       <span class="chip" :class="{on: status && status.db_backend==='mysql'}"
             :title="dbTitle">{{ dbBadge }}</span>

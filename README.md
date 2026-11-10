@@ -3,11 +3,11 @@
 一个面向物联网监测数据的 NL2SQL 分析 Agent：自然语言提问 → 自动生成 SQL → 多步归因 → 可复现的分层评估。
 覆盖室内空气质量场景（教室 / 设备 / 读数 / 告警四表），带危险语句拦截、报错自纠、执行轨迹与图表输出。
 
-**当前版本：v0.13（2026-11-10）** —— 当前演示库已切换为 **UCI Occupancy Detection 公开真实数据集**（20560 条原始记录抽样 1680 行）；正式评估与回归门禁仍固定在合成数据（种子 42）上，v0.13 起评估入口会在非基准数据源上主动拒绝出数字。技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + pgvector + Vue 3/ECharts 全部接入代码路径（其中 **MySQL 与 pgvector 受本机环境限制未端到端跑通**，见第九节）；真实模型 3 轮均值 64.6% ± 0.7%。
+**当前版本：v0.13.1（2026-11-10）** —— 演示库为 **UCI Occupancy Detection 公开真实数据集**；**MySQL 已在 3307 独立实例上端到端跑通**（免密码、不碰本机 3306），8000 端口可直接演示 MySQL 后端。正式评估与回归门禁仍固定在合成数据（种子 42）上，评估入口会在非基准数据源上主动拒绝出数字。技术栈对齐申报表：FastAPI + SQLAlchemy + MySQL + LangChain + Vue 3/ECharts 均已实际运行，**仅 pgvector 受 WorkBuddy 命令安全策略阻挡 WSL/Docker 未端到端跑通**（见第九节）；真实模型 3 轮均值 64.6% ± 0.7%。
 
 > **技术栈对照（申报表 9 项 vs 代码实际）**：Python、大模型接口沿用；**UCI 数据集已启用为当前演示库（v0.13）**；
 > FastAPI → `scripts/api.py`，SQLAlchemy → `src/db/orm.py`（模型/引擎）+ `src/db/query.py`（执行，SQLite 与 MySQL 共用），
-> MySQL → `src/db/schema_mysql.sql` + `scripts/setup_mysql.py`，
+> MySQL → `src/db/schema_mysql.sql` + `scripts/setup_mysql.py` + `start_mysql_demo.bat`（v0.13.1 已实测跑通），
 > LangChain → `src/llm/langchain_client.py`，
 > pgvector → `src/schema_retrieval/vector_store.py`，
 > Vue 3 + ECharts → `src/web/index.html`（依赖 vendor 在 `src/web/vendor/`）。
@@ -76,12 +76,22 @@ start_demo.bat real
 LLM_MODE=real python scripts/api.py
 ```
 
-切到 MySQL（可选，需本机已装 MySQL 8）：
+切到 MySQL（v0.13.1 起**不需要 root 密码**）：
 
 ```bash
-set MYSQL_PASSWORD=你的root密码        # bash 用 export
+start_mysql_demo.bat          # 一键：独立实例 + 建库 + 迁移校验 + 启动 FastAPI
+start_mysql_demo.bat real     # 上面这步 + 真实大模型
+```
+
+脚本用 `mysqld --initialize-insecure` 在 **3307** 起一个全新实例，数据目录
+`E:/tmp/mysql3307/data`，`--no-defaults` 保证不读本机 3306 的 `my.ini`；
+root 空密码，全程不碰你原来的 MySQL。它自己注入 `DB_BACKEND=mysql` 与
+`MYSQL_URL`，不需要改 `.env`。想连已有的 3306 实例也可以：
+
+```bash
+set MYSQL_PASSWORD=你的root密码
 python scripts/setup_mysql.py          # 建库 + 建表 + 导数 + 行数/聚合双重校验
-# 校验通过后把 DB_BACKEND=mysql 与 MYSQL_* 写进 .env，重启服务
+# 脚本会在进程内切到 mysql（v0.13.1 修），不必先改 .env
 ```
 
 启用 pgvector（可选，需 Docker）：
@@ -468,7 +478,7 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 | 第 2 增量 ✅ | 2026.11 | 104 条正式集、五种判定口径、五组消融、回归门禁 | 分层报告 + 消融报告 + CI 通过 |
 | 第 3 增量 ✅ | 2026.11 | 接真实模型 + 144 条独立人工标注；接 UCI 数据集；语义检索对照（负结果） | 真实 3 轮均值 64.6% ± 0.7%、UCI 链路 7/7、语义 −6.25pp |
 | 第 4 增量 ✅ | 2026.11 | 五组消融、失败分布分析、目标指标差距分析 | 消融 delta、38 处列不一致等失败归类 |
-| 第 5 增量 ◐ | 2026.11 | FastAPI / LangChain / SQLAlchemy / Vue 3+ECharts 已落地；**LangGraph 外部基线、Docker + pgvector 容器未跑通** | 技术栈对照表 + 第九节已知限制 |
+| 第 5 增量 ◐ | 2026.11 | FastAPI / LangChain / SQLAlchemy / MySQL（3307 独立实例）/ Vue 3+ECharts 均已跑通；**LangGraph 外部基线、Docker + pgvector 容器未跑通** | 技术栈对照表 + 第九节已知限制 |
 | 论文 | 2027.03—05 | 图表、消融分析、失败案例、查重、答辩 | 论文 + PPT |
 
 **每完成一层跑一次 `run_eval.py --cases ... --output ...`，把汇总另存为新的 baseline，
@@ -497,7 +507,7 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 - 目标指标中单表 75%（目标 85%）、多表 JOIN 45.8%（目标 65%）、归因 62.5%（目标 70%）未达标。开题报告已声明「以实测为准、如实报告未达成项」，论文需给原因分析，不要粉饰；
 - **Chroma / pgvector（v0.12 更新）**：v0.7 时本机装不上 `chromadb`，改用 `semantic.py` 的零依赖语义打分接到 `hybrid_score()`；v0.12 已按申报表补上 pgvector 通道（`vector_store.py`，HNSW + 余弦距离），但**本机 Docker 的 WSL 后端被安全策略拦住，容器未起，实测走的是内存向量降级路径**。两者的向量都是字符 n-gram 哈希，**不是神经网络 embedding**（DeepSeek 无 embedding 接口），语义能力弱于 BGE；开启后准确率 65.3% → 59.0%（**−6.25pp**，v0.7 实测），故默认关闭，见 5.4 与 `eval/semantic_compare.json`；
 - **SQLAlchemy 是默认执行路径（v0.12.1）**：`db/query.py` 用 `Engine + text()` 执行 SQLite 查询，只读靠 URI 的 `mode=ro`、超时靠原生 `set_progress_handler`、参数仍是 `:p0` 真绑定；装不上 SQLAlchemy 时自动降级 `sqlite3`，`/api/status` 的 `db_driver` 会显示实际用了哪个，不会出现「文档写一套、实际跑另一套」；
-- **MySQL 迁移脚本已就绪但未在本机跑通**：`scripts/setup_mysql.py` 需要本机 root 密码，本次开发环境未提供，因此 MySQL 分支的代码路径未做端到端验证。评估与演示默认仍是 SQLite，不影响任何已有数字；
+- **MySQL 已在独立实例上跑通（v0.13.1）**：本机 3306 的 root 密码未知，改用 `start_mysql_demo.bat` 在 **3307** 起全新实例（空密码、独立 datadir、`--no-defaults`）；四表行数 + 3 个聚合值双重校验全 OK，JOIN、参数绑定、只读拒绝（errno 1792）、视图、真实模型问答均实测通过。**「用了 MySQL」指的是这个 3307 实例，不是本机原有的 3306**；`DB_BACKEND` 默认仍是 sqlite，评估数字不受影响；
 - **评估固定 SQLite**：144 条用例的标准 SQL 是 SQLite 方言，`evaluate()` 会强制把后端钉回 sqlite。MySQL 只用于演示/部署，两者的数据由迁移脚本保证一致；不要把 MySQL 上的结果与评估数字混着说；
 - **LangGraph 外部框架基线（开题报告 5.1）未实施**；v0.12 起 SQL 生成走 LangChain（`langchain_openai.ChatOpenAI`），但**多步归因仍是自研运行时**，没有用 LangGraph 的图编排。论文措辞要区分「用了 LangChain」与「用了 LangGraph」；
 - 真实模型非确定性已量化：3 轮 63.9% / 64.6% / 65.3%，均值 64.6% ± 0.7%，论文主结论用均值；
@@ -505,7 +515,7 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 - 没有行列级权限、多租户、实时连库、流式输出；
 - 成本是按字符粗估的，不是真实 Token 计费；
 - 归因目前是模板化的「取数 → 查告警 → 给结论」，不是自由规划；
-- **LangGraph 外部基线、Docker 尚未落地**；MySQL 与 pgvector 属于「代码就绪、本机未跑通」，答辩时只能演示 SQLite + 内存向量这条实际路径；
+- **LangGraph 外部基线、Docker / pgvector 容器尚未落地**：`wsl.exe` 被 WorkBuddy「安全中心 → 命令安全 → 程序黑名单」拦截（不是 Windows Defender，也不是第三方杀软），Docker 的 Linux 引擎起不来；MySQL 已跑通，**向量检索仍走内存降级**，答辩时不要说 pgvector 已端到端验证；
 
 ---
 
@@ -527,6 +537,7 @@ python scripts/refresh_live.py --loop 3600  # 每小时自动，Ctrl+C 停止
 | 消融实验 | `python scripts/run_ablation.py` |
 | 单测 | `python -m unittest discover -s tests -v` |
 | 界面（FastAPI，推荐） | `python scripts/api.py` → `http://127.0.0.1:8000`（`/docs` 自动接口文档） |
+| MySQL 后端演示（免密码） | `start_mysql_demo.bat`（独立 3307 实例 + 迁移 + 启动）/ `start_mysql_demo.bat real` |
 | 界面（零依赖兜底） | `python scripts/serve.py` → `http://127.0.0.1:8765` |
 | 真实模型演示 | `start_demo.bat real`（不改 `.env`，避免污染测试与评估） |
 | 界面（离线快照） | 直接双击 `src/web/index.html`，点快捷问题看预录结果 |

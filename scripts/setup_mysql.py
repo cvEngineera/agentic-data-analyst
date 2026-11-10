@@ -260,13 +260,22 @@ def show_connection_hint() -> None:
     不直接改 .env：改配置是用户的选择，脚本只负责给出准确的两行内容，
     避免「脚本偷偷改了后端，结果演示时连的是空库」这种事故。
     """
-    print("[5/5] 启用方式（写进项目根目录 .env 后重启服务）")
-    print(f"      DB_BACKEND=mysql")
-    print(f"      MYSQL_HOST={settings.mysql_host}")
-    print(f"      MYSQL_PORT={settings.mysql_port}")
-    print(f"      MYSQL_USER={settings.mysql_user}")
-    print(f"      MYSQL_PASSWORD=******   # 与本次迁移使用的一致")
-    print(f"      MYSQL_DATABASE={settings.mysql_database}")
+    print("[5/5] 启用方式（写进项目根目录 .env 后重启服务，或用环境变量临时启动）")
+    print("      DB_BACKEND=mysql")
+    if settings.mysql_url:
+        # 完整 URL 优先级最高：分项打印出来会和实际连接的端口/密码不一致
+        # （v0.13.1 在 3307 免密独立实例上实测踩到）。
+        print(f"      MYSQL_URL={settings.mysql_url}")
+        print("      # 给了完整 URL 就不必再写 MYSQL_HOST/PORT/USER/PASSWORD/DATABASE")
+        print(f"      # 本次实际连接：{settings.mysql_url.split('@')[-1]}")
+    else:
+        print(f"      MYSQL_HOST={settings.mysql_host}")
+        print(f"      MYSQL_PORT={settings.mysql_port}")
+        print(f"      MYSQL_USER={settings.mysql_user}")
+        print(f"      MYSQL_PASSWORD={'（空）' if not settings.mysql_password else '******'}"
+              "   # 与本次迁移使用的一致")
+        print(f"      MYSQL_DATABASE={settings.mysql_database}")
+    print("      # 评估与回归门禁仍强制走 SQLite，不受 DB_BACKEND 影响")
 
 
 def main() -> None:
@@ -280,6 +289,15 @@ def main() -> None:
         print("  Windows: set MYSQL_PASSWORD=你的密码")
         print("  bash   : export MYSQL_PASSWORD=你的密码")
         raise SystemExit(2)
+
+    # 迁移脚本必须自己把后端切到 mysql（v0.13.1 修）。
+    # 起因：文档写的是「迁移完成后再把 DB_BACKEND=mysql 写进 .env」，
+    # 但 create_tables / migrate / verify 里的 get_engine() 不带 URL，
+    # 会按 settings.db_backend 取默认 sqlite —— 于是 MySQL 版 DDL 被
+    # 灌进 SQLite，报 `near "=": syntax error`（SQLite 不认 ENGINE=InnoDB）。
+    # 这个脚本此前从未端到端跑通，所以坑一直没暴露。
+    # 只改进程内的 settings 单例，不碰 .env：切换后端仍是用户的显式选择。
+    settings.db_backend = "mysql"
 
     try:
         if args.verify:

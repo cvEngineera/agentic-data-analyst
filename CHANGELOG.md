@@ -12,6 +12,39 @@ Git 历史从 v0.2 开始记录（v0.1 时期还没建仓库，不伪造历史�
 
 ---
 
+## v0.13.1 · 2026-11-10 —— MySQL 端到端跑通（不猜 root 密码）
+
+**问题**：本机 3306 的 MySQL 8.0 在跑，但 root 密码未知，迁移脚本因此从未端到端执行过；申报表里的 MySQL 一直停在「代码就绪」。
+
+**做法**：不猜密码、不重置、不动原实例。用同一个 `mysqld.exe` 在 **3307** 起一个全新独立实例：
+
+- `mysqld --no-defaults --initialize-insecure --datadir=E:/tmp/mysql3307/data` → root 空密码；`--no-defaults` 保证不读到 3306 的 `my.ini`；
+- 端口 3307、只绑 127.0.0.1，数据目录与原实例完全隔离；
+- 新增 `start_mysql_demo.bat`：把「初始化（已有则跳过）→ 启动 → 等就绪 → 迁移校验 → 以 `DB_BACKEND=mysql` 启动 FastAPI」串成一条命令，支持 `real` 参数。
+
+**顺手修掉三个「从没跑过所以没暴露」的问题**
+
+1. `setup_mysql.py` 的 `create_tables / migrate / verify` 调用不带 URL 的 `get_engine()`，会按 `settings.db_backend` 取默认 sqlite，把 MySQL DDL 灌进 SQLite 并报 `near "=": syntax error`（SQLite 不认 `ENGINE=InnoDB`）。现在脚本在 `main()` 里把进程内 `settings.db_backend` 切到 mysql，不改 `.env`；
+2. `show_connection_hint()` 在用 `MYSQL_URL` 时仍打印 `3306` 和「需要密码」，现在优先打印完整 URL 与本次实际连接地址；
+3. `agent/runtime.py` 的 Schema 自省固定读 SQLite 的 `sqlite_master`，MySQL 模式下元数据仍来自 SQLite 文件。现在按后端分派到 `orm.reflect_schema()`；评估强制 sqlite，历史口径不变。
+
+**实测数字**
+
+| 项目 | 结果 |
+|---|---|
+| 实例 | MySQL 8.0.44 @ `127.0.0.1:3307`，datadir `E:\tmp\mysql3307\data`，root 免密 |
+| 迁移校验 | **7/7**：site 5 / device 5 / sensor_data 1680 / alarm 6；全局 CO2 均值 717.97 两侧一致、3 号教室 336 条、告警 6 条 |
+| 统一执行层 | JOIN 5 行（3 号教室 827.5ppm）、`:p0` 参数绑定、`DELETE` 被 errno 1792 拒绝、视图 5 行 |
+| 真实模型端到端 | 「各教室本月 CO2 均值排名」2 步返回 5 行，无错误 |
+| 评估隔离 | 在 `DB_BACKEND=mysql` 环境下跑评估仍 6/6 通过、无方言错误，结束后后端还原为 mysql |
+| 回归 | 单测 **27/27**；8000 报 `mysql / mysql_sensor_rows=1680`，8765 仍是 sqlite 兜底 |
+
+**口径**：评估与所有准确率数字仍固定 SQLite + synthetic（种子 42）；MySQL 只承担演示/部署。3307 是新建的独立实例，不是本机原有的 3306。
+
+**已知限制**：pgvector 仍未端到端跑通（`wsl.exe` 被 WorkBuddy「命令安全 → 程序黑名单」拦截，Docker Linux 引擎起不来）；LangGraph 外部基线未实施。
+
+---
+
 ## v0.13 · 2026-11-10 —— UCI 真实数据集启用为演示库
 
 **做了什么**：把「可切换但没启用」变成「当前就在用」，同时堵住换库后最容易出错的评估口径。
